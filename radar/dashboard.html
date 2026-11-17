@@ -3,135 +3,168 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cash Forecast</title>
+<title>Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <style>
+/* RADAR — scope (default) and plotting-table (light) themes */
 :root {
-  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5; --text: #1b1f24; --muted: #5f6b7a;
-  --border: #dde2e8; --accent: #2457c5; --accent-soft: #e6eeff; --pos: #1f7a4d; --neg: #b3261e;
-  --neg-soft: #fde8e6; --warn-soft: #fff4d6; --edited: #fff1c2; --edited-border: #e0b400;
-  --bar: #7d9cd9; --bar-low: #d9534f; --grid: #e9edf2;
+  --bg: #0a0f0b; --surface: #0f1611; --surface-2: #142017; --text: #cdeccf; --muted: #7fa386;
+  --border: #22352a; --accent: #5dff9a; --accent-ink: #04140a; --accent-soft: #10291a;
+  --pos: #5dff9a; --neg: #ff6b57; --amber: #ffb000;
+  --neg-soft: #2a1210; --warn-soft: #2a2108; --edited: #2b2408; --edited-border: #b98400;
+  --bar: #3fcf7a; --bar-low: #ff6b57; --grid: #1a2a20; --glow: 0 0 8px rgba(93,255,154,.35);
+  --scan: rgba(0,0,0,.18);
+  --f-body: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --f-crt: "VT323", ui-monospace, Menlo, Consolas, monospace;
+  --f-8bit: "Press Start 2P", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #e9e1cb; --surface: #f5efdc; --surface-2: #ece3c8; --text: #2a2a1c; --muted: #6a6448;
+  --border: #c8bb92; --accent: #4b5320; --accent-ink: #f5efdc; --accent-soft: #e2dcb8;
+  --pos: #3f6b1f; --neg: #a3271c; --amber: #9a6a00;
+  --neg-soft: #f1d6cc; --warn-soft: #f3e2a8; --edited: #f3df98; --edited-border: #b08a1c;
+  --bar: #5c6b2e; --bar-low: #a3271c; --grid: #ddd2b0; --glow: none; --scan: transparent;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #111418; --surface: #1a1e24; --surface-2: #222830; --text: #e6e9ee; --muted: #9aa5b4;
-    --border: #2e353f; --accent: #8fb0ff; --accent-soft: #1f2a44; --pos: #5cc48f; --neg: #ff8a80;
-    --neg-soft: #3a1f1d; --warn-soft: #3a3016; --edited: #3d3412; --edited-border: #b38f00;
-    --bar: #5f7fc0; --bar-low: #e0605a; --grid: #262c35; color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #111418; --surface: #1a1e24; --surface-2: #222830; --text: #e6e9ee; --muted: #9aa5b4;
-  --border: #2e353f; --accent: #8fb0ff; --accent-soft: #1f2a44; --pos: #5cc48f; --neg: #ff8a80;
-  --neg-soft: #3a1f1d; --warn-soft: #3a3016; --edited: #3d3412; --edited-border: #b38f00;
-  --bar: #5f7fc0; --bar-low: #e0605a; --grid: #262c35; color-scheme: dark;
-}
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text);
-  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--f-body); }
+:root:not([data-theme="light"]) body {
+  background: radial-gradient(ellipse at 50% -10%, #12241a 0%, var(--bg) 60%) fixed, var(--bg);
+}
+/* faint CRT scanlines, scope theme only */
+body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, var(--scan) 2px 3px); }
 .wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 60px; }
-header.top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-header.top h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
-header.top .sub { color: var(--muted); font-size: 13px; }
+header.top { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between;
+  margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 14px; }
+.scope { width: 54px; height: 54px; flex: none; }
+.scope .ring { fill: none; stroke: var(--accent); stroke-opacity: .35; }
+.scope .face { fill: var(--surface-2); stroke: var(--accent); stroke-opacity: .7; }
+.scope .sweep { transform-origin: 27px 27px; animation: sweep 4s linear infinite; }
+.scope .blip { fill: var(--amber); animation: blip 4s linear infinite; }
+@keyframes sweep { to { transform: rotate(360deg); } }
+@keyframes blip { 0%, 30% { opacity: 0; } 34% { opacity: 1; } 80%, 100% { opacity: .1; } }
+@media (prefers-reduced-motion: reduce) { .scope .sweep, .scope .blip { animation: none; } }
+.wordmark { font-family: var(--f-8bit); font-size: 22px; letter-spacing: .12em; color: var(--accent);
+  text-shadow: var(--glow); margin: 0; line-height: 1.2; }
+.callsign { font-family: var(--f-8bit); font-size: 8.5px; letter-spacing: .14em; color: var(--muted);
+  text-transform: uppercase; margin-top: 6px; }
+header.top .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .status { font-size: 12px; color: var(--muted); }
-.status.dirty { color: var(--neg); font-weight: 600; }
-button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border);
+.status.dirty { color: var(--amber); font-weight: 600; }
+button { font: inherit; cursor: pointer; border-radius: 4px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); padding: 7px 12px; }
 button:hover { border-color: var(--accent); }
-button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
-:root[data-theme="dark"] button.primary { color: #0d1320; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.primary { color: #0d1320; } }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+:root:not([data-theme="light"]) button.primary { box-shadow: var(--glow); }
 button.link { border: none; background: none; color: var(--accent); padding: 2px 4px; }
 button.danger { color: var(--neg); }
 button.icon { padding: 3px 8px; }
-.banner { background: var(--warn-soft); border: 1px solid var(--edited-border); border-radius: 10px;
+#btn-theme { font-family: var(--f-8bit); font-size: 8px; letter-spacing: .08em; padding: 9px 10px; }
+.banner { background: var(--warn-soft); border: 1px solid var(--edited-border); border-radius: 4px;
   padding: 10px 14px; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
-.kpi .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-.kpi .value { font-size: 26px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
-.kpi .note { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; position: relative; }
+/* small corner ticks, like bezel markings */
+.card::before, .card::after { content: ""; position: absolute; width: 8px; height: 8px; border-color: var(--accent); opacity: .55; }
+.card::before { top: -1px; left: -1px; border-top: 1px solid; border-left: 1px solid; }
+.card::after { bottom: -1px; right: -1px; border-bottom: 1px solid; border-right: 1px solid; }
+.kpi .label { font-family: var(--f-8bit); color: var(--muted); font-size: 8.5px; text-transform: uppercase; letter-spacing: .1em; }
+.kpi .value { font-family: var(--f-crt); font-size: 44px; line-height: 1; margin-top: 10px; letter-spacing: .02em; }
+:root:not([data-theme="light"]) .kpi .value { text-shadow: 0 0 6px currentColor; }
+.kpi .note { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
 .kpi.alert { border-color: var(--bar-low); background: var(--neg-soft); }
+.kpi.alert .label::before { content: "▲ CONTACT · "; color: var(--neg); }
 .pos { color: var(--pos); } .neg { color: var(--neg); }
 .row2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; margin-bottom: 16px; align-items: start; }
-.card h2 { font-size: 15px; margin: 0 0 10px; }
-.card h2 .hint { font-weight: 400; color: var(--muted); font-size: 12.5px; margin-left: 6px; }
+.card h2 { font-family: var(--f-8bit); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; margin: 2px 0 14px; color: var(--accent); }
+.card h2 .hint { font-family: var(--f-body); font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 8px; letter-spacing: 0; text-transform: none; }
 #chart svg { width: 100%; height: auto; display: block; }
-#chart text { fill: var(--muted); font-size: 11px; }
+#chart text { fill: var(--muted); font-family: var(--f-crt); font-size: 15px; }
 .upcoming { list-style: none; margin: 0; padding: 0 4px 0 0; max-height: 300px; overflow-y: auto; }
-.upcoming li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--grid); }
+.upcoming li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--grid); }
 .upcoming li:last-child { border-bottom: none; }
-.upcoming .when { color: var(--muted); font-size: 12px; min-width: 52px; }
+.upcoming .when { font-family: var(--f-crt); font-size: 17px; color: var(--muted); min-width: 56px; line-height: 1.1; }
 .upcoming .what { flex: 1; }
 .upcoming .tag { font-size: 11px; color: var(--muted); }
-.upcoming .amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 0; overflow-x: auto; }
+.upcoming .amt { font-family: var(--f-crt); font-size: 20px; white-space: nowrap; line-height: 1.1; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none;
-  padding: 10px 14px; color: var(--muted); white-space: nowrap; }
-.tabs button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-.panel { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 16px; }
+  padding: 11px 14px; color: var(--muted); white-space: nowrap; }
+.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 4px 4px; padding: 16px; }
 .help { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
 .legend { display: inline-flex; align-items: center; gap: 6px; }
-.swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; vertical-align: middle; }
-.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.swatch { width: 14px; height: 14px; border-radius: 2px; display: inline-block; vertical-align: middle; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; }
 th, td { padding: 0; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
 th { font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 8px; background: var(--surface-2); position: sticky; top: 0; }
-td { padding: 0; }
+.grid th { font-family: var(--f-crt); font-size: 17px; font-weight: 400; letter-spacing: .02em; }
 td.txt, th.txt { text-align: left; }
+.grid td, .edit-table td { font-family: var(--f-num); font-size: 13px; }
+.grid td:first-child, .edit-table td.txt { font-family: var(--f-body); font-size: 14px; }
 .grid th:first-child, .grid td:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1;
   text-align: left; padding: 6px 10px; min-width: 190px; border-right: 1px solid var(--border); }
 .grid th:first-child { background: var(--surface-2); z-index: 2; }
 .grid td.num { padding: 6px 8px; }
-.grid input.cell { width: 92px; border: 1px solid transparent; background: transparent; color: var(--text);
-  text-align: right; font: inherit; font-variant-numeric: tabular-nums; padding: 5px 6px; border-radius: 5px; }
+.grid input.cell { width: 96px; border: 1px solid transparent; background: transparent; color: var(--text);
+  text-align: right; font: 13px var(--f-num); padding: 5px 6px; border-radius: 3px; }
 .grid input.cell:hover { border-color: var(--border); }
-.grid input.cell:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.grid input.cell:focus { outline: none; border-color: var(--accent); background: var(--surface-2); }
 .grid input.cell.edited { background: var(--edited); border-color: var(--edited-border); }
-.grid input.cell.zero { color: var(--muted); }
-.grid input.cell.has-one { font-weight: 650; }
-.grid tr.section td { background: var(--surface-2); font-weight: 650; font-size: 12px; text-transform: uppercase;
-  letter-spacing: .04em; color: var(--muted); padding: 6px 10px; text-align: left; }
+.grid input.cell.zero { color: var(--muted); opacity: .6; }
+.grid input.cell.has-one { font-weight: 650; color: var(--amber); }
+.grid tr.section td { background: var(--surface-2); font-family: var(--f-8bit) !important; font-size: 8.5px !important;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; text-align: left; }
 .grid tr.section td:first-child { background: var(--surface-2); }
 .grid tr.total td { font-weight: 650; border-top: 1px solid var(--border); }
-.grid tr.ending td { font-weight: 700; font-size: 14.5px; background: var(--accent-soft); }
+.grid tr.ending td { font-weight: 700; background: var(--accent-soft); color: var(--accent); }
 .grid tr.ending td:first-child { background: var(--accent-soft); }
-.grid td.low { color: var(--neg); }
+.grid td.low { color: var(--neg) !important; }
 .grid td.low-bg { background: var(--neg-soft) !important; }
-.grid .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; vertical-align: middle; }
+.grid .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--amber); margin-left: 5px; vertical-align: middle; }
 .edit-table td { padding: 6px 6px; vertical-align: top; text-align: left; }
 .edit-table th { text-align: left; }
 .edit-table input, .edit-table select, .settings input, .settings select {
-  font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
-  border-radius: 6px; padding: 5px 7px; }
+  font: inherit; font-family: var(--f-body); color: var(--text); background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 3px; padding: 5px 7px; }
+.edit-table input.money, .settings input.money { font-family: var(--f-num); }
 .edit-table input:focus, .edit-table select:focus, .settings input:focus { outline: none; border-color: var(--accent); }
 .edit-table input.name { width: 200px; }
 .edit-table input.money { width: 110px; text-align: right; }
 .edit-table input.note { width: 100%; min-width: 220px; }
 .edit-table td.when { min-width: 260px; }
 .months { display: flex; gap: 2px; margin-top: 6px; flex-wrap: wrap; }
-.months label { font-size: 11px; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; cursor: pointer; user-select: none; }
+.months label { font-size: 11px; border: 1px solid var(--border); border-radius: 2px; padding: 1px 5px; cursor: pointer; user-select: none; }
 .months label.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .months input { display: none; }
 .next { color: var(--muted); font-size: 12px; margin-top: 4px; }
 tr.past td { opacity: .5; }
-.kindtag { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: var(--surface-2); color: var(--muted); }
 .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 .settings label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .settings input { width: 100%; }
-.settings .box { border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-.settings .box h3 { margin: 0 0 6px; font-size: 14px; }
+.settings .box { border: 1px solid var(--border); border-radius: 4px; padding: 14px; }
+.settings .box h3 { font-family: var(--f-8bit); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+code { font-family: var(--f-num); }
 @media (max-width: 900px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .row2 { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 480px) {
-  .kpi .value { font-size: 21px; }
+  .kpi .value { font-size: 34px; }
+  .wordmark { font-size: 18px; }
   .grid th:first-child, .grid td:first-child { min-width: 140px; }
 }
 @media print {
+  body::after { display: none; }
   .actions, .tabs button:not(.active), .banner { display: none; }
 }
 </style>
@@ -139,13 +172,25 @@ tr.past td { opacity: .5; }
 <body>
 <div class="wrap">
   <header class="top">
-    <div>
-      <h1 id="title">Cash Forecast</h1>
-      <div class="sub" id="subtitle"></div>
+    <div class="brand">
+      <svg class="scope" viewBox="0 0 54 54" aria-hidden="true">
+        <defs><linearGradient id="sw" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="var(--accent)" stop-opacity="0"/><stop offset="1" stop-color="var(--accent)" stop-opacity=".55"/></linearGradient></defs>
+        <circle class="face" cx="27" cy="27" r="25"/>
+        <circle class="ring" cx="27" cy="27" r="17"/><circle class="ring" cx="27" cy="27" r="9"/>
+        <line class="ring" x1="2" y1="27" x2="52" y2="27"/><line class="ring" x1="27" y1="2" x2="27" y2="52"/>
+        <g class="sweep"><path d="M27 27 L27 2 A25 25 0 0 1 48.6 14.5 Z" fill="url(#sw)"/><line x1="27" y1="27" x2="48.6" y2="14.5" stroke="var(--accent)" stroke-width="1.5"/></g>
+        <circle class="blip" cx="38" cy="18" r="2"/>
+      </svg>
+      <div>
+        <h1 class="wordmark">RADAR</h1>
+        <div class="callsign" id="title">Cash threat detection</div>
+        <div class="sub" id="subtitle"></div>
+      </div>
     </div>
     <div class="actions">
       <span class="status" id="status"></span>
-      <button id="btn-theme" class="icon" title="Switch light/dark">◐</button>
+      <button id="btn-theme" class="icon" title="Switch between the radar scope and the plotting table view">TABLE</button>
       <button id="btn-save" class="primary" title="Download a copy of this dashboard with all your changes saved in it">Save a copy</button>
     </div>
   </header>
@@ -153,11 +198,11 @@ tr.past td { opacity: .5; }
   <section class="kpis" id="kpis"></section>
   <section class="row2">
     <div class="card">
-      <h2>Ending cash by week <span class="hint" id="chart-hint"></span></h2>
+      <h2>Cash scan · ending cash by week <span class="hint" id="chart-hint"></span></h2>
       <div id="chart"></div>
     </div>
     <div class="card">
-      <h2>Coming up <span class="hint">next 4 weeks, $10k+</span></h2>
+      <h2>Incoming <span class="hint">next 4 weeks, $10k+</span></h2>
       <ul class="upcoming" id="upcoming"></ul>
     </div>
   </section>
@@ -177,7 +222,8 @@ tr.past td { opacity: .5; }
 // Snapshot of this file's original markup, used by "Save a copy" (must run before anything renders).
 const PRISTINE = "<!doctype html>\n" + document.documentElement.outerHTML;
 const EMBEDDED = JSON.parse(document.getElementById("state").textContent);
-const LS_KEY = "cash-forecast-draft:" + location.pathname;
+const LS_KEY = "radar-draft:" + location.pathname;
+const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* ---------------- dates ---------------- */
 const DAY = 864e5;
@@ -281,7 +327,7 @@ window.__forecast = compute; // handy for checks
 const $ = id => document.getElementById(id);
 function render() {
   const F = compute();
-  $("title").textContent = (state.company ? state.company + " — " : "") + "Cash Forecast";
+  $("title").textContent = "Cash threat detection" + (state.company ? " · " + state.company : "");
   $("subtitle").textContent = "Week ending " + fmtDate(state.asOf, { year: "numeric", weekday: "short" }) + " · 13 weeks through " + fmtDate(F.weeks[F.weeks.length - 1], { year: "numeric" });
   $("status").textContent = dirty ? "Unsaved changes — click Save a copy" : "All changes saved in this file";
   $("status").className = "status" + (dirty ? " dirty" : "");
@@ -338,10 +384,11 @@ function renderChart(F) {
     s += `<rect x="${x}" y="${Math.min(y0, y1)}" width="${w}" height="${Math.max(1, Math.abs(y1 - y0))}" rx="3" fill="${color}">
       <title>Week ending ${fmtDate(c.week)}: ${fmt(c.end)}\nIn ${fmt(c.cin)} · Out ${fmt(c.cout)}</title></rect>`;
     if (i % (F.cols.length > 8 && W < 600 ? 2 : 1) === 0) s += `<text x="${x + w / 2}" y="${H - 10}" text-anchor="middle">${fmtDate(c.week)}</text>`;
+    if (c === low) s += `<circle cx="${x + w / 2}" cy="${y1}" r="4" fill="var(--bar-low)">${REDUCED ? "" : '<animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;.2;1" dur="2s" repeatCount="indefinite"/>'}</circle>`;
     if (c === low) s += `<text x="${x + w / 2}" y="${Math.min(y0, y1) - 5}" text-anchor="middle" style="fill:var(--text);font-weight:600">${fmtK(c.end)}</text>`;
   });
-  s += `<line x1="${padL}" x2="${W - padR}" y1="${y(state.minCash)}" y2="${y(state.minCash)}" stroke="var(--bar-low)" stroke-dasharray="5 4" stroke-width="1.5"/>
-    <text x="${padL + 4}" y="${y(state.minCash) - 5}" text-anchor="start" style="fill:var(--bar-low)">Minimum cushion ${fmtK(state.minCash)}</text>`;
+  s += `<line x1="${padL}" x2="${W - padR}" y1="${y(state.minCash)}" y2="${y(state.minCash)}" stroke="var(--amber)" stroke-dasharray="5 4" stroke-width="1.5"/>
+    <text x="${padL + 4}" y="${y(state.minCash) - 5}" text-anchor="start" style="fill:var(--amber);paint-order:stroke;stroke:var(--surface);stroke-width:5px">MINIMUM CUSHION ${fmtK(state.minCash)}</text>`;
   $("chart").innerHTML = s + "</svg>";
   $("chart-hint").textContent = "hover a bar for details";
 }
@@ -384,8 +431,8 @@ function panelForecast(p, F) {
   const ins = state.lines.filter(l => l.kind === "in"), outs = state.lines.filter(l => l.kind === "out");
   p.innerHTML = `
     <p class="help">Type over any number to change it for that week. Changed cells turn
-      <span class="legend"><span class="swatch" style="background:var(--edited);border:1px solid var(--edited-border)"></span>yellow</span>.
-      Delete a number (leave the cell empty) to go back to the recurring rule. <b>Bold</b> numbers include one-time items. Hover a cell to see where its number comes from.</p>
+      <span class="legend"><span class="swatch" style="background:var(--edited);border:1px solid var(--edited-border)"></span>amber</span>.
+      Delete a number (leave the cell empty) to go back to the recurring rule. <b style="color:var(--amber)">Bold amber</b> numbers include one-time items. Hover a cell to see where its number comes from.</p>
     <div class="scroll"><table class="grid">
       <thead>${head}</thead><tbody>
       ${totRow("Starting cash", "start", "total")}
@@ -563,7 +610,7 @@ function panelSettings(p, F) {
     <div class="box"><h3>Saving your work</h3>
       <p class="help">Your edits are kept in this browser automatically, but to keep them for good (or send them to someone), click
       <b>Save a copy</b> at the top. It downloads a new version of this file with everything in it. Open that file next time.</p>
-      <p class="help">Tip: name the files by week, e.g. <code>cash-forecast-${addDays(state.asOf, 7)}.html</code>.</p>
+      <p class="help">Tip: name the files by week, e.g. <code>radar-${addDays(state.asOf, 7)}.html</code>.</p>
     </div></div>`;
   const num = (id, key) => $(id).addEventListener("change", e => { const v = parseMoney(e.target.value);
     if (v === null || Number.isNaN(v)) { alert("Please enter a number"); return render(); } state[key] = v; commit(); });
@@ -589,19 +636,18 @@ $("btn-save").onclick = () => {
   const json = JSON.stringify(state).replace(/</g, "\\u003c");
   const html = PRISTINE.replace(/(<script id="state" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + json + b);
   const blob = new Blob([html], { type: "text/html" }), a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = `cash-forecast-${state.asOf}.html`;
+  a.href = URL.createObjectURL(blob); a.download = `radar-${state.asOf}.html`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   dirty = false; restoredFrom = null; render();
   $("status").textContent = "Saved — open the downloaded file next time";
 };
 (function () {
-  let t = null; try { t = localStorage.getItem("cash-forecast-theme"); } catch (e) {}
-  if (t) document.documentElement.dataset.theme = t;
-  $("btn-theme").onclick = () => {
-    const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next;
-    try { localStorage.setItem("cash-forecast-theme", next); } catch (e) {}
-  };
+  const btn = $("btn-theme");
+  const apply = t => { if (t === "light") document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
+    btn.textContent = t === "light" ? "SCOPE" : "TABLE"; };
+  let t = "dark"; try { t = localStorage.getItem("radar-theme") || "dark"; } catch (e) {}
+  apply(t);
+  btn.onclick = () => { t = t === "light" ? "dark" : "light"; apply(t); try { localStorage.setItem("radar-theme", t); } catch (e) {} };
 })();
 window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 render();

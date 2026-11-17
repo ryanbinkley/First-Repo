@@ -1,6 +1,6 @@
-# Cash forecast dashboard
+# Radar — cash threat detection
 
-A single-file, offline dashboard for the weekly 13-week cash forecast. It replaces
+Radar is a single-file dashboard for the weekly 13-week cash forecast. It replaces
 the Northrim → Forecast tab workflow with:
 
 - **Overview** – cash today, lowest projected point (with a minimum-cushion warning),
@@ -32,3 +32,12 @@ Real data files are **not** stored in this repository (see `.gitignore`).
 1. ✅ Dashboard + editable assumptions
 2. Import bank transactions (Northrim export file or API) and auto-categorize into actuals
 3. Scheduled refresh and hosting for the team
+
+## Look & feel
+
+Two views, toggled with the button in the top-right:
+- **Scope** (default) – WWII radar CRT: phosphor green on dark, amber warnings, faint scanlines.
+- **Table** – the ops-room plotting table: map paper and olive-drab ink (good for printing).
+
+Fonts (Press Start 2P, VT323, IBM Plex) load from Google Fonts; offline it falls back to system fonts.
+The sweep animation stops when the viewer's system asks for reduced motion.

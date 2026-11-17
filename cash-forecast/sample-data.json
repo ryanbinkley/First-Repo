@@ -1,0 +1,379 @@
+{
+ "company": "Sample Company",
+ "asOf": "2026-11-13",
+ "startingCash": 432000,
+ "minCash": 100000,
+ "weeks": 13,
+ "updatedAt": "2026-01-01T00:00:00Z",
+ "lines": [
+  {
+   "id": "circ",
+   "name": "Subscription receipts",
+   "kind": "in",
+   "rule": {
+    "freq": "weekly",
+    "amount": 59500
+   },
+   "note": ""
+  },
+  {
+   "id": "other_in",
+   "name": "All other deposits",
+   "kind": "in",
+   "rule": {
+    "freq": "weekly",
+    "amount": 45500
+   },
+   "note": ""
+  },
+  {
+   "id": "events_in",
+   "name": "Events receipts",
+   "kind": "in",
+   "rule": {
+    "freq": "weekly",
+    "amount": 4500
+   },
+   "note": ""
+  },
+  {
+   "id": "postage",
+   "name": "Postage",
+   "kind": "out",
+   "rule": {
+    "freq": "weekly",
+    "amount": 1500
+   },
+   "note": ""
+  },
+  {
+   "id": "payroll",
+   "name": "Payroll",
+   "kind": "out",
+   "rule": {
+    "freq": "biweekly",
+    "amount": 113500,
+    "anchor": "2026-11-20"
+   },
+   "note": ""
+  },
+  {
+   "id": "owners",
+   "name": "Cash to owners",
+   "kind": "out",
+   "rule": {
+    "freq": "monthly",
+    "amount": 34000,
+    "day": 10,
+    "months": []
+   },
+   "note": ""
+  },
+  {
+   "id": "carriers",
+   "name": "Carriers",
+   "kind": "out",
+   "rule": {
+    "freq": "biweekly",
+    "amount": 8000,
+    "anchor": "2026-11-20"
+   },
+   "note": ""
+  },
+  {
+   "id": "k401",
+   "name": "401(k) contributions",
+   "kind": "out",
+   "rule": {
+    "freq": "biweekly",
+    "amount": 8500,
+    "anchor": "2026-11-27"
+   },
+   "note": ""
+  },
+  {
+   "id": "wcomp",
+   "name": "Workers comp insurance",
+   "kind": "out",
+   "rule": {
+    "freq": "monthly",
+    "amount": 1500,
+    "day": "last",
+    "months": []
+   },
+   "note": ""
+  },
+  {
+   "id": "rent_c",
+   "name": "Rent \u2013 main office",
+   "kind": "out",
+   "rule": {
+    "freq": "monthly",
+    "amount": 12000,
+    "day": "last",
+    "months": []
+   },
+   "note": ""
+  },
+  {
+   "id": "rent_other",
+   "name": "Other rents",
+   "kind": "out",
+   "rule": {
+    "freq": "monthly",
+    "amount": 6500,
+    "day": "last",
+    "months": []
+   },
+   "note": ""
+  },
+  {
+   "id": "wick",
+   "name": "Printing partner invoice",
+   "kind": "out",
+   "rule": {
+    "freq": "none",
+    "amount": 0
+   },
+   "note": ""
+  },
+  {
+   "id": "events_out",
+   "name": "Event costs",
+   "kind": "out",
+   "rule": {
+    "freq": "none",
+    "amount": 0
+   },
+   "note": ""
+  },
+  {
+   "id": "subs",
+   "name": "Software subscriptions",
+   "kind": "out",
+   "rule": {
+    "freq": "monthly",
+    "amount": 3500,
+    "day": 1,
+    "months": []
+   },
+   "note": ""
+  },
+  {
+   "id": "prop_tax",
+   "name": "Property taxes",
+   "kind": "out",
+   "rule": {
+    "freq": "none",
+    "amount": 0
+   },
+   "note": ""
+  },
+  {
+   "id": "insurance",
+   "name": "Insurance",
+   "kind": "out",
+   "rule": {
+    "freq": "none",
+    "amount": 0
+   },
+   "note": ""
+  },
+  {
+   "id": "est_tax",
+   "name": "Quarterly tax payments",
+   "kind": "out",
+   "rule": {
+    "freq": "monthly",
+    "amount": 114000,
+    "day": 15,
+    "months": [
+     1,
+     9
+    ]
+   },
+   "note": ""
+  },
+  {
+   "id": "cc",
+   "name": "Credit card payments",
+   "kind": "out",
+   "rule": {
+    "freq": "weekly",
+    "amount": 5500
+   },
+   "note": ""
+  },
+  {
+   "id": "ap",
+   "name": "AP run \u2013 balance",
+   "kind": "out",
+   "rule": {
+    "freq": "weekly",
+    "amount": 21000
+   },
+   "note": ""
+  }
+ ],
+ "overrides": {
+  "events_in": {
+   "2026-11-20": 5500,
+   "2026-11-27": 5500,
+   "2027-01-08": 2500,
+   "2027-01-15": 2500,
+   "2027-01-22": 2500,
+   "2027-01-29": 2500,
+   "2027-02-05": 2500,
+   "2027-02-12": 0
+  },
+  "payroll": {
+   "2026-11-20": 115000,
+   "2026-12-04": 111500,
+   "2026-12-18": 115000,
+   "2027-01-01": 111500,
+   "2027-01-15": 115000,
+   "2027-01-29": 99500,
+   "2027-02-12": 111500
+  },
+  "owners": {
+   "2027-02-12": 0
+  },
+  "est_tax": {
+   "2027-01-08": 114000,
+   "2027-01-15": 0
+  },
+  "cc": {
+   "2026-11-27": 11500
+  },
+  "ap": {
+   "2026-11-27": 31500,
+   "2026-12-04": 19000,
+   "2026-12-11": 20000,
+   "2026-12-25": 31500,
+   "2027-01-01": 19000,
+   "2027-01-08": 20000,
+   "2027-01-22": 31500,
+   "2027-01-29": 23000,
+   "2027-02-05": 19000,
+   "2027-02-12": 19000
+  }
+ },
+ "oneTime": [
+  {
+   "id": "o1",
+   "date": "2026-11-20",
+   "lineId": "wick",
+   "description": "Printing invoice",
+   "amount": 13000
+  },
+  {
+   "id": "o2",
+   "date": "2026-12-25",
+   "lineId": "wick",
+   "description": "Printing invoice",
+   "amount": 7000
+  },
+  {
+   "id": "o3",
+   "date": "2027-01-29",
+   "lineId": "wick",
+   "description": "Printing invoice",
+   "amount": 15000
+  },
+  {
+   "id": "o4",
+   "date": "2026-11-20",
+   "lineId": "events_out",
+   "description": "Event costs",
+   "amount": 21000
+  },
+  {
+   "id": "o5",
+   "date": "2026-11-27",
+   "lineId": "events_out",
+   "description": "Event costs",
+   "amount": 14000
+  },
+  {
+   "id": "o6",
+   "date": "2026-12-25",
+   "lineId": "events_out",
+   "description": "Event costs",
+   "amount": 11500
+  },
+  {
+   "id": "o7",
+   "date": "2027-01-29",
+   "lineId": "events_out",
+   "description": "Event costs",
+   "amount": 11500
+  },
+  {
+   "id": "o8",
+   "date": "2026-12-25",
+   "lineId": "subs",
+   "description": "Annual software license",
+   "amount": 60000
+  },
+  {
+   "id": "o9",
+   "date": "2026-11-20",
+   "lineId": "prop_tax",
+   "description": "Property taxes",
+   "amount": 6500
+  },
+  {
+   "id": "o10",
+   "date": "2026-11-20",
+   "lineId": "insurance",
+   "description": "Insurance renewals",
+   "amount": 34000
+  }
+ ],
+ "lastWeek": {
+  "weekEnding": "2026-11-13",
+  "startCash": 422500,
+  "rows": {
+   "circ": {
+    "forecast": 59500,
+    "actual": 59000
+   },
+   "other_in": {
+    "forecast": 45500,
+    "actual": 46500
+   },
+   "events_in": {
+    "forecast": 5500,
+    "actual": 0
+   },
+   "postage": {
+    "forecast": 1500,
+    "actual": 1500
+   },
+   "owners": {
+    "forecast": 34000,
+    "actual": 35000
+   },
+   "k401": {
+    "forecast": 8500,
+    "actual": 7500
+   },
+   "wick": {
+    "forecast": 13000,
+    "actual": 0
+   },
+   "insurance": {
+    "forecast": 13000,
+    "actual": 14000
+   },
+   "cc": {
+    "forecast": 12500,
+    "actual": 13000
+   },
+   "ap": {
+    "forecast": 20000,
+    "actual": 24500
+   }
+  }
+ }
+}

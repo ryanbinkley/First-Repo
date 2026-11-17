@@ -1,0 +1,6 @@
+# Never commit real financial data
+private/
+*.xlsx
+*.xls
+*.csv
+cash-forecast-*.html

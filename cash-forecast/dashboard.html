@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cash Forecast</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5; --text: #1b1f24; --muted: #5f6b7a;
+  --border: #dde2e8; --accent: #2457c5; --accent-soft: #e6eeff; --pos: #1f7a4d; --neg: #b3261e;
+  --neg-soft: #fde8e6; --warn-soft: #fff4d6; --edited: #fff1c2; --edited-border: #e0b400;
+  --bar: #7d9cd9; --bar-low: #d9534f; --grid: #e9edf2;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --surface: #1a1e24; --surface-2: #222830; --text: #e6e9ee; --muted: #9aa5b4;
+    --border: #2e353f; --accent: #8fb0ff; --accent-soft: #1f2a44; --pos: #5cc48f; --neg: #ff8a80;
+    --neg-soft: #3a1f1d; --warn-soft: #3a3016; --edited: #3d3412; --edited-border: #b38f00;
+    --bar: #5f7fc0; --bar-low: #e0605a; --grid: #262c35; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #1a1e24; --surface-2: #222830; --text: #e6e9ee; --muted: #9aa5b4;
+  --border: #2e353f; --accent: #8fb0ff; --accent-soft: #1f2a44; --pos: #5cc48f; --neg: #ff8a80;
+  --neg-soft: #3a1f1d; --warn-soft: #3a3016; --edited: #3d3412; --edited-border: #b38f00;
+  --bar: #5f7fc0; --bar-low: #e0605a; --grid: #262c35; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 60px; }
+header.top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+header.top h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+header.top .sub { color: var(--muted); font-size: 13px; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.status { font-size: 12px; color: var(--muted); }
+.status.dirty { color: var(--neg); font-weight: 600; }
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); padding: 7px 12px; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+:root[data-theme="dark"] button.primary { color: #0d1320; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.primary { color: #0d1320; } }
+button.link { border: none; background: none; color: var(--accent); padding: 2px 4px; }
+button.danger { color: var(--neg); }
+button.icon { padding: 3px 8px; }
+.banner { background: var(--warn-soft); border: 1px solid var(--edited-border); border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.kpi .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.kpi .value { font-size: 26px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.kpi .note { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.kpi.alert { border-color: var(--bar-low); background: var(--neg-soft); }
+.pos { color: var(--pos); } .neg { color: var(--neg); }
+.row2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; margin-bottom: 16px; align-items: start; }
+.card h2 { font-size: 15px; margin: 0 0 10px; }
+.card h2 .hint { font-weight: 400; color: var(--muted); font-size: 12.5px; margin-left: 6px; }
+#chart svg { width: 100%; height: auto; display: block; }
+#chart text { fill: var(--muted); font-size: 11px; }
+.upcoming { list-style: none; margin: 0; padding: 0 4px 0 0; max-height: 300px; overflow-y: auto; }
+.upcoming li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--grid); }
+.upcoming li:last-child { border-bottom: none; }
+.upcoming .when { color: var(--muted); font-size: 12px; min-width: 52px; }
+.upcoming .what { flex: 1; }
+.upcoming .tag { font-size: 11px; color: var(--muted); }
+.upcoming .amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 0; overflow-x: auto; }
+.tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none;
+  padding: 10px 14px; color: var(--muted); white-space: nowrap; }
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 16px; }
+.help { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.legend { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; vertical-align: middle; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 0; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 8px; background: var(--surface-2); position: sticky; top: 0; }
+td { padding: 0; }
+td.txt, th.txt { text-align: left; }
+.grid th:first-child, .grid td:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1;
+  text-align: left; padding: 6px 10px; min-width: 190px; border-right: 1px solid var(--border); }
+.grid th:first-child { background: var(--surface-2); z-index: 2; }
+.grid td.num { padding: 6px 8px; }
+.grid input.cell { width: 92px; border: 1px solid transparent; background: transparent; color: var(--text);
+  text-align: right; font: inherit; font-variant-numeric: tabular-nums; padding: 5px 6px; border-radius: 5px; }
+.grid input.cell:hover { border-color: var(--border); }
+.grid input.cell:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.grid input.cell.edited { background: var(--edited); border-color: var(--edited-border); }
+.grid input.cell.zero { color: var(--muted); }
+.grid input.cell.has-one { font-weight: 650; }
+.grid tr.section td { background: var(--surface-2); font-weight: 650; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); padding: 6px 10px; text-align: left; }
+.grid tr.section td:first-child { background: var(--surface-2); }
+.grid tr.total td { font-weight: 650; border-top: 1px solid var(--border); }
+.grid tr.ending td { font-weight: 700; font-size: 14.5px; background: var(--accent-soft); }
+.grid tr.ending td:first-child { background: var(--accent-soft); }
+.grid td.low { color: var(--neg); }
+.grid td.low-bg { background: var(--neg-soft) !important; }
+.grid .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; vertical-align: middle; }
+.edit-table td { padding: 6px 6px; vertical-align: top; text-align: left; }
+.edit-table th { text-align: left; }
+.edit-table input, .edit-table select, .settings input, .settings select {
+  font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 7px; }
+.edit-table input:focus, .edit-table select:focus, .settings input:focus { outline: none; border-color: var(--accent); }
+.edit-table input.name { width: 200px; }
+.edit-table input.money { width: 110px; text-align: right; }
+.edit-table input.note { width: 100%; min-width: 220px; }
+.edit-table td.when { min-width: 260px; }
+.months { display: flex; gap: 2px; margin-top: 6px; flex-wrap: wrap; }
+.months label { font-size: 11px; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; cursor: pointer; user-select: none; }
+.months label.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.months input { display: none; }
+.next { color: var(--muted); font-size: 12px; margin-top: 4px; }
+tr.past td { opacity: .5; }
+.kindtag { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: var(--surface-2); color: var(--muted); }
+.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.settings label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.settings input { width: 100%; }
+.settings .box { border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.settings .box h3 { margin: 0 0 6px; font-size: 14px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+@media (max-width: 900px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .kpi .value { font-size: 21px; }
+  .grid th:first-child, .grid td:first-child { min-width: 140px; }
+}
+@media print {
+  .actions, .tabs button:not(.active), .banner { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1 id="title">Cash Forecast</h1>
+      <div class="sub" id="subtitle"></div>
+    </div>
+    <div class="actions">
+      <span class="status" id="status"></span>
+      <button id="btn-theme" class="icon" title="Switch light/dark">◐</button>
+      <button id="btn-save" class="primary" title="Download a copy of this dashboard with all your changes saved in it">Save a copy</button>
+    </div>
+  </header>
+  <div id="banner"></div>
+  <section class="kpis" id="kpis"></section>
+  <section class="row2">
+    <div class="card">
+      <h2>Ending cash by week <span class="hint" id="chart-hint"></span></h2>
+      <div id="chart"></div>
+    </div>
+    <div class="card">
+      <h2>Coming up <span class="hint">next 4 weeks, $10k+</span></h2>
+      <ul class="upcoming" id="upcoming"></ul>
+    </div>
+  </section>
+  <nav class="tabs" id="tabs">
+    <button data-tab="forecast" class="active">13-week forecast</button>
+    <button data-tab="recurring">Recurring items</button>
+    <button data-tab="onetime">One-time items</button>
+    <button data-tab="lastweek">Last week vs. forecast</button>
+    <button data-tab="settings">Settings &amp; new week</button>
+  </nav>
+  <section class="panel" id="panel"></section>
+</div>
+
+<script id="state" type="application/json">{"company":"Sample Company","asOf":"2026-11-13","startingCash":432000,"minCash":100000,"weeks":13,"updatedAt":"2026-01-01T00:00:00Z","lines":[{"id":"circ","name":"Subscription receipts","kind":"in","rule":{"freq":"weekly","amount":59500},"note":""},{"id":"other_in","name":"All other deposits","kind":"in","rule":{"freq":"weekly","amount":45500},"note":""},{"id":"events_in","name":"Events receipts","kind":"in","rule":{"freq":"weekly","amount":4500},"note":""},{"id":"postage","name":"Postage","kind":"out","rule":{"freq":"weekly","amount":1500},"note":""},{"id":"payroll","name":"Payroll","kind":"out","rule":{"freq":"biweekly","amount":113500,"anchor":"2026-11-20"},"note":""},{"id":"owners","name":"Cash to owners","kind":"out","rule":{"freq":"monthly","amount":34000,"day":10,"months":[]},"note":""},{"id":"carriers","name":"Carriers","kind":"out","rule":{"freq":"biweekly","amount":8000,"anchor":"2026-11-20"},"note":""},{"id":"k401","name":"401(k) contributions","kind":"out","rule":{"freq":"biweekly","amount":8500,"anchor":"2026-11-27"},"note":""},{"id":"wcomp","name":"Workers comp insurance","kind":"out","rule":{"freq":"monthly","amount":1500,"day":"last","months":[]},"note":""},{"id":"rent_c","name":"Rent \u2013 main office","kind":"out","rule":{"freq":"monthly","amount":12000,"day":"last","months":[]},"note":""},{"id":"rent_other","name":"Other rents","kind":"out","rule":{"freq":"monthly","amount":6500,"day":"last","months":[]},"note":""},{"id":"wick","name":"Printing partner invoice","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"events_out","name":"Event costs","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"subs","name":"Software subscriptions","kind":"out","rule":{"freq":"monthly","amount":3500,"day":1,"months":[]},"note":""},{"id":"prop_tax","name":"Property taxes","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"insurance","name":"Insurance","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"est_tax","name":"Quarterly tax payments","kind":"out","rule":{"freq":"monthly","amount":114000,"day":15,"months":[1,9]},"note":""},{"id":"cc","name":"Credit card payments","kind":"out","rule":{"freq":"weekly","amount":5500},"note":""},{"id":"ap","name":"AP run \u2013 balance","kind":"out","rule":{"freq":"weekly","amount":21000},"note":""}],"overrides":{"events_in":{"2026-11-20":5500,"2026-11-27":5500,"2027-01-08":2500,"2027-01-15":2500,"2027-01-22":2500,"2027-01-29":2500,"2027-02-05":2500,"2027-02-12":0},"payroll":{"2026-11-20":115000,"2026-12-04":111500,"2026-12-18":115000,"2027-01-01":111500,"2027-01-15":115000,"2027-01-29":99500,"2027-02-12":111500},"owners":{"2027-02-12":0},"est_tax":{"2027-01-08":114000,"2027-01-15":0},"cc":{"2026-11-27":11500},"ap":{"2026-11-27":31500,"2026-12-04":19000,"2026-12-11":20000,"2026-12-25":31500,"2027-01-01":19000,"2027-01-08":20000,"2027-01-22":31500,"2027-01-29":23000,"2027-02-05":19000,"2027-02-12":19000}},"oneTime":[{"id":"o1","date":"2026-11-20","lineId":"wick","description":"Printing invoice","amount":13000},{"id":"o2","date":"2026-12-25","lineId":"wick","description":"Printing invoice","amount":7000},{"id":"o3","date":"2027-01-29","lineId":"wick","description":"Printing invoice","amount":15000},{"id":"o4","date":"2026-11-20","lineId":"events_out","description":"Event costs","amount":21000},{"id":"o5","date":"2026-11-27","lineId":"events_out","description":"Event costs","amount":14000},{"id":"o6","date":"2026-12-25","lineId":"events_out","description":"Event costs","amount":11500},{"id":"o7","date":"2027-01-29","lineId":"events_out","description":"Event costs","amount":11500},{"id":"o8","date":"2026-12-25","lineId":"subs","description":"Annual software license","amount":60000},{"id":"o9","date":"2026-11-20","lineId":"prop_tax","description":"Property taxes","amount":6500},{"id":"o10","date":"2026-11-20","lineId":"insurance","description":"Insurance renewals","amount":34000}],"lastWeek":{"weekEnding":"2026-11-13","startCash":422500,"rows":{"circ":{"forecast":59500,"actual":59000},"other_in":{"forecast":45500,"actual":46500},"events_in":{"forecast":5500,"actual":0},"postage":{"forecast":1500,"actual":1500},"owners":{"forecast":34000,"actual":35000},"k401":{"forecast":8500,"actual":7500},"wick":{"forecast":13000,"actual":0},"insurance":{"forecast":13000,"actual":14000},"cc":{"forecast":12500,"actual":13000},"ap":{"forecast":20000,"actual":24500}}}}</script>
+<script>
+"use strict";
+// Snapshot of this file's original markup, used by "Save a copy" (must run before anything renders).
+const PRISTINE = "<!doctype html>\n" + document.documentElement.outerHTML;
+const EMBEDDED = JSON.parse(document.getElementById("state").textContent);
+const LS_KEY = "cash-forecast-draft:" + location.pathname;
+
+/* ---------------- dates ---------------- */
+const DAY = 864e5;
+const D = s => { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+const iso = dt => dt.toISOString().slice(0, 10);
+const addDays = (s, n) => iso(new Date(D(s).getTime() + n * DAY));
+const daysBetween = (a, b) => Math.round((D(b) - D(a)) / DAY);
+const fmtDate = (s, opts) => D(s).toLocaleDateString("en-US", Object.assign({ month: "short", day: "numeric", timeZone: "UTC" }, opts || {}));
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+/* ---------------- money ---------------- */
+const fmt = n => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
+const fmtNum = n => Math.round(n).toLocaleString("en-US");
+const fmtK = n => { const a = Math.abs(n), s = n < 0 ? "-$" : "$";
+  return a >= 1e6 ? s + (a / 1e6).toFixed(2) + "M" : a >= 1e4 ? s + Math.round(a / 1e3) + "k" : s + Math.round(a).toLocaleString("en-US"); };
+const parseMoney = v => { const t = String(v).replace(/[$,\s]/g, ""); if (t === "") return null;
+  const neg = /^\(.*\)$/.test(t); const n = Number(t.replace(/[()]/g, "")); return isNaN(n) ? NaN : (neg ? -n : n); };
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ---------------- state ---------------- */
+let state = JSON.parse(JSON.stringify(EMBEDDED));
+let dirty = false, restoredFrom = null, activeTab = "forecast";
+try {
+  const draft = JSON.parse(localStorage.getItem(LS_KEY) || "null");
+  if (draft && draft.base === EMBEDDED.updatedAt && draft.state) { state = draft.state; dirty = true; restoredFrom = draft.savedAt; }
+} catch (e) { /* storage unavailable: fine */ }
+function normalize() {
+  state.overrides = state.overrides || {}; state.oneTime = state.oneTime || [];
+  state.lastWeek = state.lastWeek || { weekEnding: state.asOf, startCash: state.startingCash, rows: {} };
+  state.weeks = state.weeks || 13;
+}
+normalize();
+function commit() {
+  dirty = true;
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ base: EMBEDDED.updatedAt, savedAt: new Date().toISOString(), state })); } catch (e) {}
+  render();
+}
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+/* ---------------- forecast engine ---------------- */
+function weekEndings() { const out = []; for (let i = 1; i <= state.weeks; i++) out.push(addDays(state.asOf, 7 * i)); return out; }
+// Week (in `weeks`) whose 7-day span contains `date`; null if outside the forecast.
+function weekEndingOf(date) { return addDays(state.asOf, 7 * Math.ceil(daysBetween(state.asOf, date) / 7)); }
+function weekFor(date, weeks) { const w = weekEndingOf(date); return weeks.includes(w) ? w : null; }
+function ruleOccurrences(rule, weeks) {
+  const hits = {};
+  if (!rule || !rule.amount) return hits;
+  if (rule.freq === "weekly") weeks.forEach(w => hits[w] = rule.amount);
+  else if (rule.freq === "biweekly" && rule.anchor) weeks.forEach(w => { if (((daysBetween(rule.anchor, w) % 14) + 14) % 14 < 7) hits[w] = rule.amount; });
+  else if (rule.freq === "monthly") {
+    const months = rule.months && rule.months.length ? rule.months : [1,2,3,4,5,6,7,8,9,10,11,12];
+    const start = D(addDays(weeks[0], -7)), end = D(weeks[weeks.length - 1]);
+    for (let y = start.getUTCFullYear(), m = start.getUTCMonth(); y < end.getUTCFullYear() || (y === end.getUTCFullYear() && m <= end.getUTCMonth()); m++) {
+      if (m > 11) { m = 0; y++; }
+      if (!months.includes(m + 1)) continue;
+      const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      let w;
+      if (rule.day === "last") {
+        // last week of the month = the last week-ending date that falls in this month
+        w = weekEndingOf(iso(new Date(Date.UTC(y, m, lastDay))));
+        if (D(w).getUTCMonth() !== m) w = addDays(w, -7);
+        if (!weeks.includes(w)) w = null;
+      } else {
+        w = weekFor(iso(new Date(Date.UTC(y, m, Math.min(Number(rule.day) || 1, lastDay)))), weeks);
+      }
+      if (w) hits[w] = (hits[w] || 0) + rule.amount;
+    }
+  }
+  return hits;
+}
+function compute() {
+  const weeks = weekEndings();
+  const cells = {}; // lineId -> week -> {rule, override, base, ones[], total}
+  for (const line of state.lines) {
+    const occ = ruleOccurrences(line.rule, weeks), ov = state.overrides[line.id] || {};
+    cells[line.id] = {};
+    for (const w of weeks) {
+      const rule = occ[w] || 0, has = Object.prototype.hasOwnProperty.call(ov, w);
+      cells[line.id][w] = { rule, override: has ? ov[w] : null, base: has ? ov[w] : rule, ones: [], total: 0 };
+    }
+  }
+  for (const o of state.oneTime) {
+    const w = weekFor(o.date, weeks);
+    if (w && cells[o.lineId]) cells[o.lineId][w].ones.push(o);
+  }
+  const cols = []; let cash = state.startingCash;
+  for (const w of weeks) {
+    let cin = 0, cout = 0;
+    for (const line of state.lines) {
+      const c = cells[line.id][w]; c.total = c.base + c.ones.reduce((s, o) => s + Number(o.amount || 0), 0);
+      if (line.kind === "in") cin += c.total; else cout += c.total;
+    }
+    const start = cash; cash = start + cin - cout;
+    cols.push({ week: w, start, cin, cout, net: cin - cout, end: cash });
+  }
+  return { weeks, cells, cols };
+}
+window.__forecast = compute; // handy for checks
+
+/* ---------------- rendering ---------------- */
+const $ = id => document.getElementById(id);
+function render() {
+  const F = compute();
+  $("title").textContent = (state.company ? state.company + " — " : "") + "Cash Forecast";
+  $("subtitle").textContent = "Week ending " + fmtDate(state.asOf, { year: "numeric", weekday: "short" }) + " · 13 weeks through " + fmtDate(F.weeks[F.weeks.length - 1], { year: "numeric" });
+  $("status").textContent = dirty ? "Unsaved changes — click Save a copy" : "All changes saved in this file";
+  $("status").className = "status" + (dirty ? " dirty" : "");
+  renderBanner(); renderKpis(F); renderChart(F); renderUpcoming(F); renderPanel(F);
+}
+function renderBanner() {
+  $("banner").innerHTML = restoredFrom
+    ? `<div class="banner"><span>Showing your edits from ${esc(new Date(restoredFrom).toLocaleString())} that haven't been saved to a file yet.</span>
+       <button id="btn-discard" class="link">Discard edits</button></div>` : "";
+  const b = $("btn-discard");
+  if (b) b.onclick = () => { if (!confirm("Discard all unsaved edits and go back to this file's saved version?")) return;
+    try { localStorage.removeItem(LS_KEY); } catch (e) {} state = JSON.parse(JSON.stringify(EMBEDDED)); normalize(); dirty = false; restoredFrom = null; render(); };
+}
+function lastWeekTotals() {
+  const lw = state.lastWeek, r = { fIn: 0, fOut: 0, aIn: 0, aOut: 0, hasActual: false };
+  for (const line of state.lines) {
+    const row = lw.rows[line.id]; if (!row) continue;
+    const f = Number(row.forecast || 0), a = row.actual == null || row.actual === "" ? null : Number(row.actual);
+    if (a != null) r.hasActual = true;
+    if (line.kind === "in") { r.fIn += f; r.aIn += a || 0; } else { r.fOut += f; r.aOut += a || 0; }
+  }
+  r.fEnd = lw.startCash + r.fIn - r.fOut; r.aEnd = lw.startCash + r.aIn - r.aOut; return r;
+}
+function renderKpis(F) {
+  const low = F.cols.reduce((m, c) => c.end < m.end ? c : m, F.cols[0]);
+  const last = F.cols[F.cols.length - 1];
+  const below = F.cols.find(c => c.end < state.minCash);
+  const lw = lastWeekTotals(), varc = lw.aEnd - lw.fEnd;
+  $("kpis").innerHTML = `
+    <div class="card kpi"><div class="label">Cash today</div><div class="value">${fmtK(state.startingCash)}</div>
+      <div class="note">Net of reserve, as of ${fmtDate(state.asOf)}</div></div>
+    <div class="card kpi ${low.end < state.minCash ? "alert" : ""}"><div class="label">Lowest point</div><div class="value ${low.end < state.minCash ? "neg" : ""}">${fmtK(low.end)}</div>
+      <div class="note">Week ending ${fmtDate(low.week)}${below ? ` · <span class="neg">below ${fmtK(state.minCash)} cushion from ${fmtDate(below.week)}</span>` : ` · stays above ${fmtK(state.minCash)} cushion`}</div></div>
+    <div class="card kpi"><div class="label">In 13 weeks</div><div class="value">${fmtK(last.end)}</div>
+      <div class="note"><span class="${last.end - state.startingCash >= 0 ? "pos" : "neg"}">${last.end - state.startingCash >= 0 ? "+" : ""}${fmtK(last.end - state.startingCash)}</span> vs. today</div></div>
+    <div class="card kpi"><div class="label">Last week vs. forecast</div>
+      <div class="value ${lw.hasActual ? (varc >= 0 ? "pos" : "neg") : ""}">${lw.hasActual ? (varc >= 0 ? "+" : "") + fmtK(varc) : "—"}</div>
+      <div class="note">${lw.hasActual ? `Ended ${fmtK(lw.aEnd)} vs. ${fmtK(lw.fEnd)} forecast` : "Enter actuals in the Last week tab"}</div></div>`;
+}
+function renderChart(F) {
+  const W = 760, H = 260, padL = 56, padR = 12, padT = 14, padB = 30;
+  const vals = F.cols.map(c => c.end).concat([state.minCash, 0]);
+  let max = Math.max(...vals), min = Math.min(...vals);
+  const step = niceStep((max - min) / 4); max = Math.ceil(max / step) * step; min = Math.floor(min / step) * step;
+  const y = v => padT + (H - padT - padB) * (1 - (v - min) / (max - min || 1));
+  const bw = (W - padL - padR) / F.cols.length;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Projected ending cash by week">`;
+  for (let v = min; v <= max + 1; v += step)
+    s += `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${padL - 6}" y="${y(v) + 4}" text-anchor="end">${fmtK(v)}</text>`;
+  const low = F.cols.reduce((m, c) => c.end < m.end ? c : m, F.cols[0]);
+  F.cols.forEach((c, i) => {
+    const x = padL + i * bw + bw * 0.18, w = bw * 0.64, y0 = y(0), y1 = y(c.end);
+    const color = c.end < state.minCash ? "var(--bar-low)" : "var(--bar)";
+    s += `<rect x="${x}" y="${Math.min(y0, y1)}" width="${w}" height="${Math.max(1, Math.abs(y1 - y0))}" rx="3" fill="${color}">
+      <title>Week ending ${fmtDate(c.week)}: ${fmt(c.end)}\nIn ${fmt(c.cin)} · Out ${fmt(c.cout)}</title></rect>`;
+    if (i % (F.cols.length > 8 && W < 600 ? 2 : 1) === 0) s += `<text x="${x + w / 2}" y="${H - 10}" text-anchor="middle">${fmtDate(c.week)}</text>`;
+    if (c === low) s += `<text x="${x + w / 2}" y="${Math.min(y0, y1) - 5}" text-anchor="middle" style="fill:var(--text);font-weight:600">${fmtK(c.end)}</text>`;
+  });
+  s += `<line x1="${padL}" x2="${W - padR}" y1="${y(state.minCash)}" y2="${y(state.minCash)}" stroke="var(--bar-low)" stroke-dasharray="5 4" stroke-width="1.5"/>
+    <text x="${padL + 4}" y="${y(state.minCash) - 5}" text-anchor="start" style="fill:var(--bar-low)">Minimum cushion ${fmtK(state.minCash)}</text>`;
+  $("chart").innerHTML = s + "</svg>";
+  $("chart-hint").textContent = "hover a bar for details";
+}
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw || 1))), n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+function renderUpcoming(F) {
+  const items = [];
+  for (const w of F.weeks.slice(0, 4)) for (const line of state.lines) {
+    const c = F.cells[line.id][w];
+    if (c.base >= 10000 && !(line.kind === "in" && line.rule.freq === "weekly" && c.override == null))
+      items.push({ w, name: line.name, amt: c.base, kind: line.kind, tag: c.override != null ? "adjusted" : "recurring" });
+    for (const o of c.ones) if (o.amount >= 10000) items.push({ w, name: o.description || line.name, amt: Number(o.amount), kind: line.kind, tag: "one-time · " + line.name });
+  }
+  items.sort((a, b) => a.w < b.w ? -1 : a.w > b.w ? 1 : b.amt - a.amt);
+  $("upcoming").innerHTML = items.length ? items.map(i => `<li><span class="when">${fmtDate(i.w)}</span>
+    <span class="what">${esc(i.name)}<br><span class="tag">${esc(i.tag)}</span></span>
+    <span class="amt ${i.kind === "in" ? "pos" : ""}">${i.kind === "in" ? "+" : "−"}${fmtK(i.amt)}</span></li>`).join("")
+    : `<li><span class="what" style="color:var(--muted)">Nothing over $10k in the next 4 weeks.</span></li>`;
+}
+
+/* ---------------- tabs ---------------- */
+$("tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (!b) return;
+  activeTab = b.dataset.tab; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x === b)); render(); });
+function renderPanel(F) {
+  const p = $("panel");
+  ({ forecast: panelForecast, recurring: panelRecurring, onetime: panelOneTime, lastweek: panelLastWeek, settings: panelSettings })[activeTab](p, F);
+}
+
+function panelForecast(p, F) {
+  const head = `<tr><th>Week ending</th>${F.weeks.map(w => `<th>${fmtDate(w)}</th>`).join("")}</tr>`;
+  const lineRow = line => `<tr><td title="${esc(line.note)}">${esc(line.name)}${line.note ? '<span class="dot"></span>' : ""}</td>${F.weeks.map(w => {
+    const c = F.cells[line.id][w];
+    const tip = [`Rule: ${fmt(c.rule)}`].concat(c.override != null ? [`Changed by hand to ${fmt(c.override)}`] : [])
+      .concat(c.ones.map(o => `One-time: ${o.description || line.name} ${fmt(o.amount)}`)).join("\n");
+    const cls = ["cell", c.override != null ? "edited" : "", c.total === 0 ? "zero" : "", c.ones.length ? "has-one" : ""].join(" ");
+    return `<td><input class="${cls}" data-line="${line.id}" data-week="${w}" value="${c.total === 0 ? "–" : fmtNum(c.total)}" title="${esc(tip)}" inputmode="decimal"></td>`;
+  }).join("")}</tr>`;
+  const totRow = (label, key, cls) => `<tr class="${cls || "total"}"><td>${label}</td>${F.cols.map(c => {
+    const low = key === "end" && c.end < state.minCash;
+    return `<td class="num ${low ? "low low-bg" : ""}">${fmt(c[key])}</td>`; }).join("")}</tr>`;
+  const ins = state.lines.filter(l => l.kind === "in"), outs = state.lines.filter(l => l.kind === "out");
+  p.innerHTML = `
+    <p class="help">Type over any number to change it for that week. Changed cells turn
+      <span class="legend"><span class="swatch" style="background:var(--edited);border:1px solid var(--edited-border)"></span>yellow</span>.
+      Delete a number (leave the cell empty) to go back to the recurring rule. <b>Bold</b> numbers include one-time items. Hover a cell to see where its number comes from.</p>
+    <div class="scroll"><table class="grid">
+      <thead>${head}</thead><tbody>
+      ${totRow("Starting cash", "start", "total")}
+      <tr class="section"><td colspan="${F.weeks.length + 1}">Cash in</td></tr>
+      ${ins.map(lineRow).join("")}
+      ${totRow("Total cash in", "cin")}
+      <tr class="section"><td colspan="${F.weeks.length + 1}">Cash out</td></tr>
+      ${outs.map(lineRow).join("")}
+      ${totRow("Total cash out", "cout")}
+      ${totRow("Net change", "net")}
+      ${totRow("Ending cash", "end", "ending")}
+      </tbody></table></div>`;
+  p.querySelectorAll("input.cell").forEach(inp => {
+    inp.addEventListener("focus", () => { const c = F.cells[inp.dataset.line][inp.dataset.week]; inp.value = c.total ? String(Math.round(c.total * 100) / 100) : ""; inp.select(); });
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); if (e.key === "Escape") { inp.dataset.cancel = "1"; inp.blur(); } });
+    inp.addEventListener("blur", () => {
+      const { line, week } = inp.dataset, c = F.cells[line][week];
+      if (inp.dataset.cancel) { render(); return; }
+      const v = parseMoney(inp.value), ones = c.ones.reduce((s, o) => s + Number(o.amount || 0), 0);
+      if (Number.isNaN(v)) { alert("Please enter a number, e.g. 25000"); render(); return; }
+      const ov = state.overrides[line] = state.overrides[line] || {};
+      const newBase = v === null ? null : v - ones;
+      const before = JSON.stringify(ov[week]);
+      if (newBase === null || newBase === c.rule) delete ov[week]; else ov[week] = newBase;
+      if (!Object.keys(ov).length) delete state.overrides[line];
+      if (JSON.stringify((state.overrides[line] || {})[week]) !== before) commit(); else render();
+    });
+  });
+}
+
+const FREQ = { weekly: "Every week", biweekly: "Every other week", monthly: "Monthly / quarterly / yearly", none: "No rule (one-time items only)" };
+function describeNext(line) {
+  const weeks = weekEndings(), occ = ruleOccurrences(line.rule, weeks), ws = Object.keys(occ).sort().slice(0, 4);
+  return ws.length ? "Next: " + ws.map(w => fmtDate(w)).join(", ") : "Not in the next 13 weeks";
+}
+function panelRecurring(p) {
+  const whenCell = (line, i) => {
+    const r = line.rule;
+    if (r.freq === "biweekly") return `First week ending <input type="date" data-i="${i}" data-f="anchor" value="${esc(r.anchor || state.asOf)}">`;
+    if (r.freq === "monthly") {
+      const days = ['<option value="last"' + (r.day === "last" ? " selected" : "") + ">Last week of month</option>"]
+        .concat(Array.from({ length: 31 }, (_, d) => `<option value="${d + 1}"${String(r.day) === String(d + 1) ? " selected" : ""}>Due on the ${ordinal(d + 1)}</option>`));
+      const months = r.months || [];
+      return `<select data-i="${i}" data-f="day">${days.join("")}</select>
+        <div class="months" title="Leave all unselected for every month">${MONTHS.map((m, k) =>
+          `<label class="${months.includes(k + 1) ? "on" : ""}"><input type="checkbox" data-i="${i}" data-month="${k + 1}" ${months.includes(k + 1) ? "checked" : ""}>${m}</label>`).join("")}</div>
+        <div class="next">${months.length ? "Only in the highlighted months" : "Every month (click months to limit, e.g. quarterly)"}</div>`;
+    }
+    return "";
+  };
+  p.innerHTML = `
+    <p class="help">These rules fill in the forecast automatically, week after week. Change an amount or timing here and every future week updates.
+      To change just one week, edit the number in the <b>13-week forecast</b> tab instead.</p>
+    <div class="scroll"><table class="edit-table"><thead><tr><th>Line item</th><th>In / out</th><th>Amount each time</th><th>How often</th><th>When</th><th>Notes</th><th></th></tr></thead><tbody>
+    ${state.lines.map((l, i) => `<tr>
+      <td><input class="name" data-i="${i}" data-f="name" value="${esc(l.name)}"></td>
+      <td><select data-i="${i}" data-f="kind"><option value="in"${l.kind === "in" ? " selected" : ""}>Cash in</option><option value="out"${l.kind === "out" ? " selected" : ""}>Cash out</option></select></td>
+      <td><input class="money" data-i="${i}" data-f="amount" value="${l.rule.amount ? fmtNum(l.rule.amount) : ""}" ${l.rule.freq === "none" ? "disabled placeholder='—'" : ""}></td>
+      <td><select data-i="${i}" data-f="freq">${Object.entries(FREQ).map(([k, v]) => `<option value="${k}"${l.rule.freq === k ? " selected" : ""}>${v}</option>`).join("")}</select></td>
+      <td class="when">${whenCell(l, i)}${l.rule.freq !== "none" ? `<div class="next">${describeNext(l)}</div>` : ""}</td>
+      <td><input class="note" data-i="${i}" data-f="note" value="${esc(l.note)}" placeholder="Reminder for yourself"></td>
+      <td><button class="icon danger" data-del="${i}" title="Delete this line">✕</button></td></tr>`).join("")}
+    </tbody></table></div>
+    <div style="margin-top:12px"><button id="add-line">+ Add a line item</button></div>`;
+  p.querySelectorAll("[data-f]").forEach(el => el.addEventListener("change", () => {
+    const l = state.lines[el.dataset.i], f = el.dataset.f;
+    if (f === "name" || f === "note") l[f] = el.value;
+    else if (f === "kind") l.kind = el.value;
+    else if (f === "amount") { const v = parseMoney(el.value); if (Number.isNaN(v)) { alert("Please enter a number"); return render(); } l.rule.amount = v || 0; }
+    else if (f === "freq") { l.rule.freq = el.value; if (el.value === "biweekly" && !l.rule.anchor) l.rule.anchor = addDays(state.asOf, 7);
+      if (el.value === "monthly" && l.rule.day == null) { l.rule.day = 1; l.rule.months = []; } }
+    else if (f === "anchor") l.rule.anchor = el.value;
+    else if (f === "day") l.rule.day = el.value === "last" ? "last" : Number(el.value);
+    commit();
+  }));
+  p.querySelectorAll("[data-month]").forEach(el => el.addEventListener("change", () => {
+    const l = state.lines[el.dataset.i], m = Number(el.dataset.month), set = new Set(l.rule.months || []);
+    el.checked ? set.add(m) : set.delete(m); l.rule.months = [...set].sort((a, b) => a - b); commit();
+  }));
+  p.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => {
+    const l = state.lines[b.dataset.del], n = state.oneTime.filter(o => o.lineId === l.id).length;
+    if (!confirm(`Delete "${l.name}"?` + (n ? ` Its ${n} one-time item(s) will also be removed.` : ""))) return;
+    state.lines.splice(b.dataset.del, 1); delete state.overrides[l.id]; state.oneTime = state.oneTime.filter(o => o.lineId !== l.id); commit();
+  }));
+  $("add-line").onclick = () => { state.lines.push({ id: "l" + uid(), name: "New line item", kind: "out", rule: { freq: "weekly", amount: 0 }, note: "" }); commit(); };
+}
+const ordinal = n => n + (n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th");
+
+function panelOneTime(p) {
+  const weeks = weekEndings(), first = addDays(state.asOf, 1), last = weeks[weeks.length - 1];
+  const items = state.oneTime.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const opts = sel => state.lines.map(l => `<option value="${l.id}"${l.id === sel ? " selected" : ""}>${esc(l.name)} (${l.kind === "in" ? "in" : "out"})</option>`).join("");
+  p.innerHTML = `
+    <p class="help">Known payments or receipts that happen once – an invoice, an event, a tax bill, a big customer payment.
+      They're added on top of the recurring amount for that week. Items outside the 13 weeks are kept and will show up when their week arrives.</p>
+    <div class="toolbar"><span></span><button id="add-one" class="primary">+ Add a one-time item</button></div>
+    <div class="scroll"><table class="edit-table"><thead><tr><th>Date</th><th>Line item</th><th>Description</th><th>Amount</th><th>Lands in week ending</th><th></th></tr></thead><tbody>
+    ${items.length ? items.map(o => { const w = weekFor(o.date, weeks), past = o.date < first;
+      return `<tr class="${past ? "past" : ""}">
+      <td><input type="date" data-id="${o.id}" data-f="date" value="${esc(o.date)}"></td>
+      <td><select data-id="${o.id}" data-f="lineId">${opts(o.lineId)}</select></td>
+      <td><input class="note" data-id="${o.id}" data-f="description" value="${esc(o.description)}" placeholder="What is it?"></td>
+      <td><input class="money" data-id="${o.id}" data-f="amount" value="${fmtNum(o.amount || 0)}"></td>
+      <td style="color:var(--muted)">${w ? fmtDate(w) : past ? "Already past" : "After " + fmtDate(last)}</td>
+      <td><button class="icon danger" data-del="${o.id}" title="Delete">✕</button></td></tr>`; }).join("")
+    : `<tr><td colspan="6" style="color:var(--muted);padding:14px">No one-time items yet.</td></tr>`}
+    </tbody></table></div>`;
+  $("add-one").onclick = () => { const out = state.lines.find(l => l.kind === "out") || state.lines[0];
+    state.oneTime.push({ id: "o" + uid(), date: weeks[0], lineId: out ? out.id : "", description: "", amount: 0 }); commit(); };
+  p.querySelectorAll("[data-f]").forEach(el => el.addEventListener("change", () => {
+    const o = state.oneTime.find(x => x.id === el.dataset.id), f = el.dataset.f;
+    if (f === "amount") { const v = parseMoney(el.value); if (Number.isNaN(v)) { alert("Please enter a number"); return render(); } o.amount = v || 0; }
+    else o[f] = el.value;
+    commit();
+  }));
+  p.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => {
+    state.oneTime = state.oneTime.filter(o => o.id !== b.dataset.del); commit(); }));
+}
+
+function panelLastWeek(p) {
+  const lw = state.lastWeek, t = lastWeekTotals();
+  const row = l => { const r = lw.rows[l.id] || {}; const f = Number(r.forecast || 0), a = r.actual == null || r.actual === "" ? null : Number(r.actual);
+    const v = a == null ? null : (l.kind === "in" ? a - f : f - a);
+    if (!f && a == null) return "";
+    return `<tr><td class="txt" style="padding:6px 10px">${esc(l.name)}</td><td style="padding:6px 10px">${fmt(f)}</td>
+      <td style="padding:4px 6px"><input class="money" data-line="${l.id}" value="${a == null ? "" : fmtNum(a)}" placeholder="enter"></td>
+      <td style="padding:6px 10px" class="${v == null ? "" : v >= 0 ? "pos" : "neg"}">${v == null ? "" : (v >= 0 ? "+" : "") + fmt(v)}</td></tr>`; };
+  const others = state.lines.filter(l => !(lw.rows[l.id] && (lw.rows[l.id].forecast || lw.rows[l.id].actual != null)));
+  const tot = (label, f, a, better) => `<tr class="total"><td class="txt" style="padding:6px 10px"><b>${label}</b></td><td style="padding:6px 10px"><b>${fmt(f)}</b></td>
+    <td style="padding:6px 10px"><b>${fmt(a)}</b></td><td style="padding:6px 10px" class="${better >= 0 ? "pos" : "neg"}"><b>${better >= 0 ? "+" : ""}${fmt(better)}</b></td></tr>`;
+  p.innerHTML = `
+    <p class="help">Week ending <b>${fmtDate(lw.weekEnding, { year: "numeric" })}</b>. Variance is shown so that <span class="pos">green</span> is good for cash
+      (more came in, or less went out, than planned). Enter actuals from the Cash Report.</p>
+    <div class="scroll edit-table"><table><thead><tr><th class="txt">Line item</th><th>Forecast</th><th>Actual</th><th>Variance</th></tr></thead><tbody>
+      <tr><td class="txt" style="padding:6px 10px">Starting cash</td><td style="padding:6px 10px">${fmt(lw.startCash)}</td><td style="padding:6px 10px">${fmt(lw.startCash)}</td><td></td></tr>
+      <tr class="section"><td colspan="4" class="txt" style="padding:6px 10px;color:var(--muted);font-size:12px">CASH IN</td></tr>
+      ${state.lines.filter(l => l.kind === "in").map(row).join("")}
+      ${tot("Total cash in", t.fIn, t.aIn, t.aIn - t.fIn)}
+      <tr class="section"><td colspan="4" class="txt" style="padding:6px 10px;color:var(--muted);font-size:12px">CASH OUT</td></tr>
+      ${state.lines.filter(l => l.kind === "out").map(row).join("")}
+      ${tot("Total cash out", t.fOut, t.aOut, t.fOut - t.aOut)}
+      ${tot("Ending cash", t.fEnd, t.aEnd, t.aEnd - t.fEnd)}
+    </tbody></table></div>
+    ${others.length ? `<div style="margin-top:12px" class="help">Add an actual for another line:
+      <select id="lw-add"><option value="">Choose…</option>${others.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join("")}</select></div>` : ""}
+    ${Math.abs(t.aEnd - state.startingCash) > 1 && t.hasActual ? `<div class="banner" style="margin-top:12px">Actual ending cash (${fmt(t.aEnd)}) differs from the starting cash used in the forecast (${fmt(state.startingCash)}).
+      <button id="lw-use" class="link">Use ${fmt(t.aEnd)} as starting cash</button></div>` : ""}`;
+  p.querySelectorAll("input[data-line]").forEach(el => el.addEventListener("change", () => {
+    const v = parseMoney(el.value); if (Number.isNaN(v)) { alert("Please enter a number"); return render(); }
+    const r = lw.rows[el.dataset.line] = lw.rows[el.dataset.line] || { forecast: 0 }; r.actual = v; commit(); }));
+  const add = $("lw-add"); if (add) add.onchange = () => { if (add.value) { lw.rows[add.value] = { forecast: 0, actual: 0 }; commit(); } };
+  const use = $("lw-use"); if (use) use.onclick = () => { state.startingCash = Math.round(t.aEnd * 100) / 100; commit(); };
+}
+
+function panelSettings(p, F) {
+  p.innerHTML = `<div class="settings">
+    <div class="box"><h3>This week</h3>
+      <label>Company name</label><input id="s-company" value="${esc(state.company)}">
+      <div style="height:10px"></div>
+      <label>Week ending (last actual)</label><input type="date" id="s-asof" value="${esc(state.asOf)}">
+      <div style="height:10px"></div>
+      <label>Starting cash, net of reserve</label><input id="s-cash" value="${fmtNum(state.startingCash)}">
+      <div style="height:10px"></div>
+      <label>Minimum cash cushion (warning line)</label><input id="s-min" value="${fmtNum(state.minCash)}">
+    </div>
+    <div class="box"><h3>Start next week</h3>
+      <p class="help">Do this once a week. It moves the forecast forward one week:</p>
+      <ol class="help" style="padding-left:18px">
+        <li>The week ending ${fmtDate(F.weeks[0])} becomes "last week", using its forecast for comparison.</li>
+        <li>Starting cash is set to that week's forecasted ending cash (${fmt(F.cols[0].end)}).</li>
+        <li>Then enter the actuals in <b>Last week vs. forecast</b> and click <b>Use as starting cash</b>.</li>
+      </ol>
+      <button id="s-roll" class="primary">Start week ending ${fmtDate(F.weeks[0])} →</button>
+    </div>
+    <div class="box"><h3>Saving your work</h3>
+      <p class="help">Your edits are kept in this browser automatically, but to keep them for good (or send them to someone), click
+      <b>Save a copy</b> at the top. It downloads a new version of this file with everything in it. Open that file next time.</p>
+      <p class="help">Tip: name the files by week, e.g. <code>cash-forecast-${addDays(state.asOf, 7)}.html</code>.</p>
+    </div></div>`;
+  const num = (id, key) => $(id).addEventListener("change", e => { const v = parseMoney(e.target.value);
+    if (v === null || Number.isNaN(v)) { alert("Please enter a number"); return render(); } state[key] = v; commit(); });
+  num("s-cash", "startingCash"); num("s-min", "minCash");
+  $("s-company").addEventListener("change", e => { state.company = e.target.value; commit(); });
+  $("s-asof").addEventListener("change", e => { if (e.target.value) { state.asOf = e.target.value; commit(); } });
+  $("s-roll").onclick = () => {
+    const w = F.weeks[0];
+    if (!confirm(`Start the week ending ${fmtDate(w, { year: "numeric" })}? The current "last week" comparison will be replaced.`)) return;
+    const rows = {}; for (const l of state.lines) { const c = F.cells[l.id][w]; if (c.total) rows[l.id] = { forecast: c.total, actual: null }; }
+    state.lastWeek = { weekEnding: w, startCash: state.startingCash, rows };
+    state.startingCash = Math.round(F.cols[0].end * 100) / 100; state.asOf = w;
+    for (const id of Object.keys(state.overrides)) { for (const k of Object.keys(state.overrides[id])) if (k <= w) delete state.overrides[id][k];
+      if (!Object.keys(state.overrides[id]).length) delete state.overrides[id]; }
+    activeTab = "lastweek"; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x.dataset.tab === "lastweek"));
+    commit();
+  };
+}
+
+/* ---------------- save & theme ---------------- */
+$("btn-save").onclick = () => {
+  state.updatedAt = new Date().toISOString();
+  const json = JSON.stringify(state).replace(/</g, "\\u003c");
+  const html = PRISTINE.replace(/(<script id="state" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + json + b);
+  const blob = new Blob([html], { type: "text/html" }), a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `cash-forecast-${state.asOf}.html`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  dirty = false; restoredFrom = null; render();
+  $("status").textContent = "Saved — open the downloaded file next time";
+};
+(function () {
+  let t = null; try { t = localStorage.getItem("cash-forecast-theme"); } catch (e) {}
+  if (t) document.documentElement.dataset.theme = t;
+  $("btn-theme").onclick = () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("cash-forecast-theme", next); } catch (e) {}
+  };
+})();
+window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+render();
+</script>
+</body>
+</html>

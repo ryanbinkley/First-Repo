@@ -266,6 +266,7 @@ code { font-family: var(--f-num); }
   </section>
   <nav class="tabs" id="tabs">
     <button data-tab="forecast" class="active">13-week forecast</button>
+    <button data-tab="horizon">Over the horizon</button>
     <button data-tab="lastweek">Last week vs. forecast</button>
     <button data-tab="import">Bank import</button>
     <button data-tab="settings">Settings &amp; new week</button>
@@ -518,8 +519,33 @@ function renderOutflows(F) {
 /* ---------------- tabs ---------------- */
 $("tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (!b) return;
   activeTab = b.dataset.tab; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x === b)); render(); });
+function horizonItems() { const last = weekEndings().slice(-1)[0]; return state.oneTime.filter(o => weekEndingOf(o.date) > last).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0); }
+function panelHorizon(p, F) {
+  const items = horizonItems(), byId = Object.fromEntries(state.lines.map(l => [l.id, l])), last = F.weeks[F.weeks.length - 1];
+  const tot = k => items.filter(o => byId[o.lineId] && byId[o.lineId].kind === k).reduce((s, o) => s + Number(o.amount), 0);
+  p.innerHTML = `
+    <div class="toolbar"><p class="help" style="margin:0">One-time items dated after ${fmtDate(last, { year: "numeric" })}, beyond the 13-week forecast.
+        Each one moves into the forecast automatically when its week comes into range.</p>
+      <div class="actions"><button id="h-add" class="primary">+ Add a later item</button></div></div>
+    ${items.length ? `<div class="scroll"><table class="mini horizon"><thead><tr><th class="txt">Date</th><th>Weeks out</th><th class="txt">Item</th><th class="txt">Line</th><th>Amount</th><th></th></tr></thead><tbody>
+      ${items.map(o => { const l = byId[o.lineId] || { name: "?", kind: "out" }, wk = weekEndingOf(o.date);
+        return `<tr><td class="txt">${fmtDate(o.date, { year: "numeric" })}</td><td>${daysBetween(state.asOf, wk) / 7}</td>
+          <td class="txt">${esc(o.description || l.name)}</td><td class="txt help">${esc(l.name)}</td>
+          <td class="${l.kind === "in" ? "pos" : "neg"}">${l.kind === "in" ? "+" : "−"}${fmt(o.amount)}</td>
+          <td style="white-space:nowrap"><button class="link" data-hedit="${o.id}">Edit</button><button class="link danger" data-hdel="${o.id}">Delete</button></td></tr>`; }).join("")}
+      ${tot("out") ? `<tr class="total"><td class="txt" colspan="4"><b>Total cash out</b></td><td class="neg"><b>−${fmt(tot("out"))}</b></td><td></td></tr>` : ""}
+      ${tot("in") ? `<tr class="total"><td class="txt" colspan="4"><b>Total cash in</b></td><td class="pos"><b>+${fmt(tot("in"))}</b></td><td></td></tr>` : ""}
+    </tbody></table></div>` : `<p class="help">Nothing scheduled beyond ${fmtDate(last)} yet. Use <b>+ Add a later item</b> for known future payments or receipts.</p>`}`;
+  $("h-add").onclick = () => addItemDialog({ later: true });
+  p.querySelectorAll("[data-hedit]").forEach(b => b.onclick = () => oneTimeDialog(b.dataset.hedit));
+  p.querySelectorAll("[data-hdel]").forEach(b => b.onclick = () => { const o = state.oneTime.find(x => x.id === b.dataset.hdel);
+    if (!confirm(`Delete "${o.description}" (${fmt(o.amount)}, ${fmtDate(o.date)})?`)) return;
+    state.oneTime = state.oneTime.filter(x => x !== o); commit(); });
+}
 function renderPanel(F) {
-  ({ forecast: panelForecast, lastweek: panelLastWeek, import: panelImport, settings: panelSettings })[activeTab]($("panel"), F);
+  const n = horizonItems().length, hb = document.querySelector('#tabs [data-tab="horizon"]');
+  if (hb) hb.textContent = "Over the horizon" + (n ? ` (${n})` : "");
+  ({ forecast: panelForecast, horizon: panelHorizon, lastweek: panelLastWeek, import: panelImport, settings: panelSettings })[activeTab]($("panel"), F);
 }
 
 /* ---------------- dialogs ---------------- */
@@ -545,6 +571,19 @@ const fv = (d, name) => { const el = d.querySelector(`[name="${name}"]`); return
 const moneyCheck = (d, name) => { const v = parseMoney(fv(d, name)); return v == null || Number.isNaN(v) ? "Please enter an amount, e.g. 25000" : null; };
 const weekOptions = (sel, extra) => (extra && !weekEndings().includes(extra) ? `<option value="${extra}" selected>${fmtDate(extra, { year: "numeric" })} (outside forecast)</option>` : "")
   + weekEndings().map(w => `<option value="${w}"${w === sel ? " selected" : ""}>Week ending ${fmtDate(w, { year: "numeric" })}</option>`).join("");
+// Week picker with a "Later date…" option for items beyond the 13-week forecast.
+function whenField(selWeek, laterDate) {
+  const last = weekEndings().slice(-1)[0];
+  return `<label>Week</label><select name="week">${weekEndings().map(w => `<option value="${w}"${!laterDate && w === selWeek ? " selected" : ""}>Week ending ${fmtDate(w, { year: "numeric" })}</option>`).join("")}
+      <option value="later"${laterDate ? " selected" : ""}>Later date…</option></select>
+    <div data-later${laterDate ? "" : " hidden"}><label>Date</label><input type="date" name="later" min="${addDays(last, 1)}" value="${laterDate || addDays(last, 7)}"></div>`;
+}
+function wireWhen(d) { const sel = d.querySelector("[name=week]"); sel.addEventListener("change", () => { d.querySelector("[data-later]").hidden = sel.value !== "later"; }); }
+function whenCheck(d) {
+  if (fv(d, "week") !== "later") return null;
+  const v = fv(d, "later"), last = weekEndings().slice(-1)[0];
+  return !v ? "Please pick a date" : v <= last ? `For dates up to ${fmtDate(last)}, pick the week from the list instead` : null;
+}
 async function askScope(title, text, allowFuture) {
   const buttons = [{ label: "Cancel", value: null, skipCheck: true }, { label: "Just this week", value: "one", cls: allowFuture ? "" : "primary" }];
   if (allowFuture) buttons.push({ label: "This and all future weeks", value: "future", cls: "primary" });
@@ -697,17 +736,17 @@ function describeFreq(r) {
 const ordinal = n => n + (n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th");
 
 /* ---------------- add / edit dialogs ---------------- */
-async function addItemDialog({ lineId, week }) {
+async function addItemDialog({ lineId, week, later }) {
   const pre = state.lines.find(l => l.id === lineId), kind = pre ? pre.kind : "out", w = week || weekEndings()[0];
   const lineOpts = k => state.lines.filter(l => l.kind === k).map(l => `<option value="${l.id}"${pre && l.id === pre.id ? " selected" : ""}>${esc(l.name)}</option>`).join("")
     + `<option value="__new">+ New line (uses the label)</option>`;
   const { value, d } = await modal({ title: "Add an item", buttons: [{ label: "Cancel", value: null, skipCheck: true },
-      { label: "Add", value: "add", cls: "primary", validate: d => !fv(d, "label").trim() ? "Please give it a label" : moneyCheck(d, "amount") }],
+      { label: "Add", value: "add", cls: "primary", validate: d => !fv(d, "label").trim() ? "Please give it a label" : moneyCheck(d, "amount") || whenCheck(d) }],
     body: `<div class="seg"><label><input type="radio" name="kind" value="out"${kind === "out" ? " checked" : ""}> Cash out</label>
              <label><input type="radio" name="kind" value="in"${kind === "in" ? " checked" : ""}> Cash in</label></div>
       <label>Label</label><input name="label" placeholder="e.g. Roof repair" autofocus>
       <div class="two"><div><label>Amount</label><input name="amount" class="money" inputmode="decimal" placeholder="0"></div>
-        <div><label>Week</label><select name="week">${weekOptions(w)}</select></div></div>
+        <div>${whenField(w, later ? addDays(weekEndings().slice(-1)[0], 7) : null)}</div></div>
       <div class="seg"><label><input type="radio" name="type" value="one" checked> One-time</label>
         <label><input type="radio" name="type" value="rec"> Recurring</label></div>
       <div data-show="one"><label>Put it under</label><select name="line"></select></div>
@@ -719,16 +758,18 @@ async function addItemDialog({ lineId, week }) {
       const sync = () => { const k = d.querySelector("[name=kind]:checked").value, t = d.querySelector("[name=type]:checked").value, sel = d.querySelector("[name=line]");
         const keep = sel.value; sel.innerHTML = lineOpts(k); if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
         d.querySelectorAll("[data-show]").forEach(x => x.hidden = x.dataset.show !== t); };
-      d.querySelectorAll("input[type=radio]").forEach(r => r.onchange = sync); sync();
+      d.querySelectorAll("input[type=radio]").forEach(r => r.onchange = sync); sync(); wireWhen(d);
       if (pre) d.querySelector("[name=label]").value = "";
     } });
   if (value !== "add") return;
   const k = d.querySelector("[name=kind]:checked").value, type = d.querySelector("[name=type]:checked").value;
-  const label = fv(d, "label").trim(), amount = parseMoney(fv(d, "amount")), wk = fv(d, "week");
+  const label = fv(d, "label").trim(), amount = parseMoney(fv(d, "amount")), isLater = fv(d, "week") === "later";
+  const wk = isLater ? weekEndingOf(fv(d, "later")) : fv(d, "week");
   if (type === "one") {
     let lid = fv(d, "line");
     if (lid === "__new") { lid = "l" + uid(); state.lines.push({ id: lid, name: label, kind: k, rule: { freq: "none", amount: 0 }, note: "" }); }
-    state.oneTime.push({ id: newId(), date: wk, lineId: lid, description: label, amount });
+    state.oneTime.push({ id: newId(), date: isLater ? fv(d, "later") : wk, lineId: lid, description: label, amount });
+    if (isLater) toast(`Added for ${fmtDate(fv(d, "later"), { year: "numeric" })}: see Over the horizon`);
   } else {
     const f = fv(d, "freq"), m = D(wk).getUTCMonth() + 1, day = D(wk).getUTCDate();
     const rule = f === "weekly" ? { freq: "weekly", amount } : f === "biweekly" ? { freq: "biweekly", amount, anchor: wk }
@@ -741,18 +782,20 @@ async function addItemDialog({ lineId, week }) {
 }
 async function oneTimeDialog(id) {
   const o = state.oneTime.find(x => x.id === id); if (!o) return;
-  const line = state.lines.find(l => l.id === o.lineId), cur = weekEndingOf(o.date);
-  const { value, d } = await modal({ title: "One-time item", buttons: [{ label: "Delete", value: "del", cls: "danger", skipCheck: true },
-      { label: "Cancel", value: null, skipCheck: true }, { label: "Save", value: "save", cls: "primary", validate: d => moneyCheck(d, "amount") }],
+  const line = state.lines.find(l => l.id === o.lineId), cur = weekEndingOf(o.date), beyond = !weekEndings().includes(cur);
+  const { value, d } = await modal({ title: "One-time item", onOpen: wireWhen, buttons: [{ label: "Delete", value: "del", cls: "danger", skipCheck: true },
+      { label: "Cancel", value: null, skipCheck: true }, { label: "Save", value: "save", cls: "primary", validate: d => moneyCheck(d, "amount") || whenCheck(d) }],
     body: `<label>Label</label><input name="label" value="${esc(o.description)}">
       <div class="two"><div><label>Amount</label><input name="amount" class="money" value="${fmtNum(o.amount)}"></div>
-        <div><label>Week</label><select name="week">${weekOptions(cur, cur)}</select></div></div>
+        <div>${whenField(cur, beyond ? o.date : null)}</div></div>
       <label>Put it under</label><select name="line">${state.lines.filter(l => l.kind === (line ? line.kind : "out")).map(l =>
         `<option value="${l.id}"${l.id === o.lineId ? " selected" : ""}>${esc(l.name)}</option>`).join("")}</select>` });
   if (value === "del") { state.oneTime = state.oneTime.filter(x => x.id !== id); return commit(); }
   if (value !== "save") return;
   o.description = fv(d, "label").trim(); o.amount = parseMoney(fv(d, "amount")); o.lineId = fv(d, "line");
-  const nw = fv(d, "week"); if (nw !== cur) o.date = addDays(o.date, daysBetween(cur, nw));
+  const nw = fv(d, "week");
+  if (nw === "later") o.date = fv(d, "later");
+  else if (nw !== cur) o.date = beyond ? nw : addDays(o.date, daysBetween(cur, nw));
   commit();
 }
 async function lineDialog(lineId) {

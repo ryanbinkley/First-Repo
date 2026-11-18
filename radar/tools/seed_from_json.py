@@ -98,6 +98,9 @@ def main(path):
                     "insert into public.weekly_actuals (week_ending, line_id, amount, source) values "
                     f"({q(we)}, {line_id(k)}, {q(float(r['actual']))}, 'manual');")
 
+    # mark management-decision lines when the category column exists (added by a later migration)
+    out.append("do $$ begin if exists (select 1 from information_schema.columns where table_name = 'forecast_lines' and column_name = 'category') then "
+               "update public.forecast_lines set category = 'decision' where key in ('est_tax', 'owners'); end if; end $$;")
     out.append("commit;")
     print("\n".join(out))
 

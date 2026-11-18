@@ -198,6 +198,9 @@ body.readonly #btn-add, body.readonly #btn-undo, body.readonly .addcell, body.re
 .a-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .a-add input { flex: 1; min-width: 180px; }
 #published:empty { display: none; }
+#acc-chart svg { width: 100%; height: auto; display: block; }
+#acc-chart text { fill: var(--muted); font-family: var(--f-crt); font-size: 15px; }
+#acc-win { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px; padding: 5px 8px; }
 #published { font-size: 12px; }
 .dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 34px 16px;
   border: 1px dashed var(--accent); border-radius: 4px; cursor: pointer; background: var(--surface-2); text-align: center; }
@@ -268,6 +271,7 @@ code { font-family: var(--f-num); }
     <button data-tab="forecast" class="active">13-week forecast</button>
     <button data-tab="horizon">Over the horizon</button>
     <button data-tab="lastweek">Last week vs. forecast</button>
+    <button data-tab="accuracy" hidden>Forecast accuracy</button>
     <button data-tab="import">Bank import</button>
     <button data-tab="settings">Settings &amp; new week</button>
   </nav>
@@ -545,7 +549,7 @@ function panelHorizon(p, F) {
 function renderPanel(F) {
   const n = horizonItems().length, hb = document.querySelector('#tabs [data-tab="horizon"]');
   if (hb) hb.textContent = "Over the horizon" + (n ? ` (${n})` : "");
-  ({ forecast: panelForecast, horizon: panelHorizon, lastweek: panelLastWeek, import: panelImport, settings: panelSettings })[activeTab]($("panel"), F);
+  ({ forecast: panelForecast, horizon: panelHorizon, lastweek: panelLastWeek, accuracy: panelAccuracy, import: panelImport, settings: panelSettings })[activeTab]($("panel"), F);
 }
 
 /* ---------------- dialogs ---------------- */
@@ -1190,6 +1194,7 @@ async function cloudStart() {
   document.body.classList.toggle("readonly", !canEdit());
   await reloadFromServer(true);
   $("btn-publish").hidden = !canEdit(); $("btn-publish").onclick = publishDialog;
+  document.querySelector('#tabs [data-tab="accuracy"]').hidden = false;
   loadLastPublished();
   sb.channel("radar-changes")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "change_log" }, p => {
@@ -1214,7 +1219,7 @@ function signInScreen() {
 async function reloadFromServer(first) {
   const { data, error } = await sb.rpc("radar_state");
   if (error || !data) return gate(`<div class="card gatecard"><p class="neg">Couldn't load Radar: ${esc(error ? error.message : "no data yet. Has the forecast been loaded?")}</p></div>`);
-  state = data; normalize(); lastJSON = JSON.stringify(state);
+  state = data; normalize(); lastJSON = JSON.stringify(state); accCache = {};
   if (first) undoStack = [];
   gate(""); render();
 }
@@ -1353,6 +1358,64 @@ async function accessBox(box) {
 }
 
 
+
+/* ---------------- forecast accuracy (cloud mode) ---------------- */
+let accWindow = 52, accCache = {};
+const ACC_WINDOWS = [[26, "Last 6 months"], [52, "Last year"], [104, "Last 2 years"], [9999, "All history"]];
+async function panelAccuracy(p) {
+  const since = accWindow === 9999 ? "2000-01-01" : addDays(state.asOf, -7 * accWindow);
+  p.innerHTML = `<div class="toolbar"><p class="help" style="margin:0">How past forecasts compared with what actually happened.
+      <b>Positive</b> means cash came in <b>higher</b> than forecast.</p>
+    <select id="acc-win">${ACC_WINDOWS.map(([n, l]) => `<option value="${n}"${n === accWindow ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+    <div id="acc-body"><p class="help">Crunching the numbers…</p></div>`;
+  $("acc-win").onchange = e => { accWindow = Number(e.target.value); render(); };
+  let R = accCache[since];
+  if (!R) {
+    const r = await sb.rpc("accuracy_report", { p_since: since });
+    if (r.error) return $("acc-body") && ($("acc-body").innerHTML = `<p class="neg">${esc(r.error.message)}</p>`);
+    R = accCache[since] = r.data;
+  }
+  if (!$("acc-body") || activeTab !== "accuracy") return;
+  if (!R.horizon.length) return $("acc-body").innerHTML = `<p class="help">No history yet. Admins can add past weeks in Settings → Load history.</p>`;
+  const H = Object.fromEntries(R.horizon.map(x => [x.h, x])), sg = v => (v > 0 ? "+" : v < 0 ? "−" : "") + fmtK(Math.abs(v));
+  const card = h => { const x = H[h]; if (!x) return "";
+    return `<div class="card kpi"><div class="label">${h} week${h > 1 ? "s" : ""} out</div><div class="value">±${fmtK(x.miss_end)}</div>
+      <div class="note">Typical miss in ending cash. On average cash ended <span class="${x.bias_end >= 0 ? "pos" : "neg"}">${sg(x.bias_end)}</span>
+      ${x.bias_end >= 0 ? "above" : "below"} forecast · 8 in 10 within ±${fmtK(x.miss_end_80)}</div></div>`; };
+  // chart: typical miss (bars) and average bias (dots) by weeks ahead
+  const hs = R.horizon, Wd = 760, Ht = 200, pl = 56, pb = 26, pt = 12, bw = (Wd - pl - 10) / 13;
+  const mx = Math.max(...hs.map(x => Math.max(x.miss_end_80, Math.abs(x.bias_end)))) || 1, step = niceStep(mx / 3), top = Math.ceil(mx / step) * step;
+  const yy = v => pt + (Ht - pt - pb) * (1 - v / top);
+  let svg = `<svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="Forecast miss by weeks ahead">`;
+  for (let v = 0; v <= top + 1; v += step) svg += `<line x1="${pl}" x2="${Wd - 10}" y1="${yy(v)}" y2="${yy(v)}" stroke="var(--grid)"/><text x="${pl - 6}" y="${yy(v) + 4}" text-anchor="end">${fmtK(v)}</text>`;
+  hs.forEach(x => { const cx = pl + (x.h - 1) * bw + bw / 2;
+    svg += `<rect x="${cx - bw * 0.3}" y="${yy(x.miss_end)}" width="${bw * 0.6}" height="${yy(0) - yy(x.miss_end)}" rx="2" fill="var(--bar)"><title>${x.h} weeks out: typical miss ±${fmt(x.miss_end)}, 8 in 10 within ±${fmt(x.miss_end_80)} (n=${x.n})</title></rect>
+      <line x1="${cx}" x2="${cx}" y1="${yy(x.miss_end)}" y2="${yy(x.miss_end_80)}" stroke="var(--bar)" stroke-width="2" opacity=".5"/>
+      <circle cx="${cx}" cy="${yy(Math.abs(x.bias_end))}" r="4" fill="var(--amber)"><title>Average: cash ended ${sg(x.bias_end)} vs forecast</title></circle>
+      <text x="${cx}" y="${Ht - 8}" text-anchor="middle">${x.h}</text>`; });
+  svg += `</svg>`;
+  const verdict = l => {
+    if (l.category === "decision") return `<span class="help">set by management</span>`;
+    if (Math.abs(l.avg_f) < Math.abs(l.avg_a) * 0.25) return `<span class="neg">mostly not forecast</span> (≈${fmtK(l.avg_a)}/wk)`;
+    const pct = l.avg_f ? l.bias / Math.abs(l.avg_f) : 0;
+    if (Math.abs(l.bias) < 500 || Math.abs(pct) < 0.03) return `<span class="pos">on target</span>`;
+    return `forecast ${Math.round(Math.abs(pct) * 100)}% ${l.bias < 0 ? "high" : "low"}`;
+  };
+  const tag = l => l.category === "decision" ? ' <span class="help">· decision</span>' : l.category === "transfer" ? ' <span class="help">· transfer</span>' : l.archived ? ' <span class="help">· past line</span>' : "";
+  $("acc-body").innerHTML = `
+    <p class="help">Based on ${R.forecasts} saved forecasts covering ${R.weeks} weeks of actuals.</p>
+    <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">${card(1)}${card(4)}${card(13)}</div>
+    <div class="card" style="margin-bottom:14px"><h2>Miss by weeks ahead <span class="hint">bar = typical miss, line = 8 in 10, dot = average lean</span></h2><div id="acc-chart">${svg}</div></div>
+    <h3 class="subhead">By line <span class="help">forecasts made 1–4 weeks ahead, average per week</span></h3>
+    <div class="scroll"><table class="mini"><thead><tr><th class="txt">Line</th><th>Forecast</th><th>Actual</th><th>Difference</th><th class="txt">Verdict</th></tr></thead><tbody>
+      ${R.lines.map(l => `<tr><td class="txt">${esc(l.name)}${tag(l)}</td><td>${fmt(l.avg_f)}</td><td>${fmt(l.avg_a)}</td>
+        <td class="${(l.kind === "in" ? l.bias >= 0 : l.bias <= 0) ? "pos" : "neg"}">${l.bias > 0 ? "+" : ""}${fmt(l.bias)}</td><td class="txt">${verdict(l)}</td></tr>`).join("")}
+    </tbody></table></div>
+    ${R.years.length > 1 ? `<h3 class="subhead" style="margin-top:16px">By year <span class="help">ending cash, 4 weeks ahead</span></h3>
+    <div class="scroll"><table class="mini"><thead><tr><th class="txt">Year</th><th>Average lean</th><th>Typical miss</th><th>Forecasts</th></tr></thead><tbody>
+      ${R.years.map(y => `<tr><td class="txt">${y.year}</td><td class="${y.bias_end >= 0 ? "pos" : "neg"}">${sg(y.bias_end)}</td><td>±${fmtK(y.miss_end)}</td><td>${y.n}</td></tr>`).join("")}
+    </tbody></table></div>` : ""}`;
+}
 /* ---------------- load history (admins, cloud mode) ---------------- */
 let historyLoading = false;
 const hp = html => { const el = document.getElementById("h-prog"); if (el) el.innerHTML = html; };

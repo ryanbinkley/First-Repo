@@ -32,8 +32,9 @@ Real data files are **not** stored in this repository (see `.gitignore`).
 
 1. ✅ Dashboard + editable assumptions
 2. ✅ Import the weekly Northrim CSV and auto-categorize into actuals
-3. Direct bank connection (replaces the CSV download)
-4. Scheduled refresh and hosting for the team
+3. Supabase database (schema, change log, security tests in `supabase/`) – next: connect Radar to it
+4. Direct bank connection (replaces the CSV download)
+5. Open WebUI finance tools; hosting for the team
 
 ## Look & feel
 

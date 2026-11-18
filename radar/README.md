@@ -5,11 +5,12 @@ the Northrim → Forecast tab workflow with:
 
 - **Overview** – cash today, lowest projected point (with a minimum-cushion warning),
   cash in 13 weeks, and last week's actual vs. forecast.
-- **13-week forecast grid** – type over any week's number to adjust it (shown in yellow);
-  clear the cell to go back to the rule.
-- **Recurring items** – the rules that fill the grid: weekly, every other week, or
-  monthly/quarterly/yearly (due on a given day or the last week of the month).
-- **One-time items** – known invoices, events, tax bills, big receipts.
+- **13-week forecast grid** – calendar-style: click a number to change it, drag it to another
+  week to move it (asks "just this week" or "this and all future weeks"). One-time items are
+  amber pills you can drag or click to edit. **+ Add item** adds one-time or recurring items;
+  click a line name to edit its schedule. Undo with the button or Ctrl/Cmd+Z.
+- **Significant future outflows** – one-time, hand-adjusted, and monthly/quarterly/yearly
+  outflows over a threshold (default $10k) in the next 13 weeks.
 - **Last week vs. forecast** – enter actuals from the Cash Report.
 - **Settings & new week** – starting cash, cushion, and a "Start next week" button that
   rolls everything forward.

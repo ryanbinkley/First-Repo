@@ -11,5 +11,5 @@ create table storage.objects (id uuid primary key default gen_random_uuid(), buc
 alter table storage.objects enable row level security;
 grant usage on schema auth, storage, public to anon, authenticated;
 grant execute on all functions in schema auth to anon, authenticated;
-alter default privileges in schema public grant all on tables to anon, authenticated;
-alter default privileges in schema public grant all on sequences to anon, authenticated;
+-- No default table privileges: matches a project created with
+-- "Grant API access to new tables automatically" turned OFF.

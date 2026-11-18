@@ -307,6 +307,18 @@ alter table public.members enable row level security;
 create policy read on public.members for select to authenticated using (public.is_member());
 create policy manage on public.members for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+-- Explicit table privileges (the project does not grant API access to new tables automatically).
+-- Row-level security above decides which rows each signed-in person can actually touch.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on
+  public.settings, public.forecast_lines, public.line_schedules, public.week_overrides, public.one_time_items,
+  public.import_rules, public.week_closes, public.weekly_actuals, public.bank_files, public.bank_transactions,
+  public.members
+  to authenticated;
+grant select, insert on public.forecast_snapshots, public.forecast_snapshot_values to authenticated;
+grant select on public.change_log to authenticated;
+grant execute on function public.my_role(), public.is_member(), public.can_edit(), public.is_admin() to authenticated;
+
 -- Nothing is visible without signing in.
 revoke all on all tables in schema public from anon;
 revoke all on all functions in schema public from anon;

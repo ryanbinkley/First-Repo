@@ -138,3 +138,4 @@ grant usage on schema reporting to radar_readonly;
 grant select on all tables in schema reporting to radar_readonly;
 revoke all on schema reporting from public;
 revoke execute on function public.radar_state() from anon;
+grant execute on function public.radar_state(), public.schedule_json(public.line_schedules) to authenticated;

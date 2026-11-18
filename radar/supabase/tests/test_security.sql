@@ -123,4 +123,39 @@ do $$ begin
 end $$;
 reset role;
 
+-- 9. Invitations: admin pre-authorizes an email; first confirmed sign-in grants access
+select pg_temp.act_as('admin@example.com'); set role authenticated;
+do $$ begin
+  if public.set_member('NewPerson@Example.com', 'editor') <> 'invited' then raise exception 'FAIL: invite not created'; end if;
+  if public.set_member('viewer@example.com', 'editor') <> 'added' then raise exception 'FAIL: existing user not updated'; end if;
+  perform public.set_member('viewer@example.com', 'viewer');
+  if (select count(*) from public.member_invites) <> 1 then raise exception 'FAIL: admin cannot see invites'; end if;
+end $$;
+reset role;
+select pg_temp.act_as('editor@example.com'); set role authenticated;
+do $$ begin
+  if (select count(*) from public.member_invites) <> 0 then raise exception 'FAIL: non-admin sees invites'; end if;
+  begin perform public.set_member('x@example.com', 'admin'); raise exception 'FAIL: editor invited someone';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+insert into auth.users (id, email, email_confirmed_at) values
+  ('00000000-0000-0000-0000-0000000000c1', 'newperson@example.com', null);   -- not confirmed yet
+select pg_temp.act_as('newperson@example.com'); set role authenticated;
+do $$ begin
+  if public.whoami() ->> 'role' is not null then raise exception 'FAIL: unconfirmed email claimed an invite'; end if;
+end $$;
+reset role;
+update auth.users set email_confirmed_at = now() where email = 'newperson@example.com';
+select pg_temp.act_as('newperson@example.com'); set role authenticated;
+do $$ begin
+  if public.whoami() ->> 'role' <> 'editor' then raise exception 'FAIL: invite not accepted on sign-in'; end if;
+  if (select count(*) from public.forecast_lines) = 0 then raise exception 'FAIL: invited editor cannot read'; end if;
+end $$;
+reset role;
+do $$ begin
+  if exists (select 1 from public.member_invites) then raise exception 'FAIL: invite not cleared'; end if;
+  if not exists (select 1 from public.change_log where table_name = 'members' and via = 'invite') then raise exception 'FAIL: invite acceptance not logged'; end if;
+end $$;
+
 select 'ALL SECURITY TESTS PASSED' as result;

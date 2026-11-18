@@ -36,8 +36,8 @@ This folder holds Radar's database design as migration files. Nothing here conta
    The **Pro plan** is recommended: daily backups, and the project never pauses for inactivity.
 3. **Sign-in.** The pilot uses emailed sign-in links (on by default). In Authentication → URL Configuration
    set the **Site URL** to where Radar is hosted (e.g. `https://ryanbinkley.github.io/First-Repo/`) and add the
-   same address under **Redirect URLs**. Once everyone has signed in once, turn off **Allow new users to sign
-   up** (Authentication → Sign In / Providers) so only existing people can get links.
+   same address under **Redirect URLs**. Keep **Allow new users to sign up** on so invited people
+   can sign in the first time; anyone not invited only sees "No access yet".
    Later: Google sign-in (Providers → Google, OAuth client with user type **Internal** in ADN's Google Cloud).
 4. **Apply the migrations** in order, with the Supabase CLI (`supabase link`, then `supabase db push`)
    or by pasting each file into the SQL editor.
@@ -49,7 +49,8 @@ This folder holds Radar's database design as migration files. Nothing here conta
    insert into public.members (user_id, email, role)
    select id, email, 'admin' from auth.users where email = 'you@…';
    ```
-   After that, admins add people from Radar → Settings → Access (they must have signed in once).
+   After that, admins add people from Radar → Settings → Access. Someone who hasn't signed in yet is
+   **invited**: they get that role automatically the first time they sign in with that email.
    Or in SQL:
    ```sql
    insert into public.members (user_id, email, role)

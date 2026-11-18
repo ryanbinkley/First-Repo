@@ -1275,22 +1275,29 @@ function cloudImport(pi, weekEnding) {
 async function accessBox(box) {
   box.innerHTML = `<h3>Access</h3><p class="help">Signed in as <b>${esc(me.email)}</b> (${esc(myRole)}). <button class="link" id="a-out">Sign out</button></p>
     ${myRole === "admin" ? `<div id="a-list" class="help">Loading people…</div>
-      <form id="a-add" class="a-add"><input id="a-email" type="email" placeholder="email of someone who has signed in once" required>
+      <p class="help" style="margin:10px 0 0">Add someone by email. If they haven't signed in yet, they're invited and get access the first time they sign in.</p>
+      <form id="a-add" class="a-add"><input id="a-email" type="email" placeholder="name@adn.com" required>
         <select id="a-role"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="admin">Admin</option></select>
         <button>Add</button></form>` : ""}`;
   $("a-out").onclick = () => sb.auth.signOut();
   if (myRole !== "admin") return;
   const list = async () => {
-    const { data, error } = await sb.from("members").select("email, role").order("email");
-    $("a-list").innerHTML = error ? `<span class="neg">${esc(error.message)}</span>` : data.map(m => `<div class="a-row"><span>${esc(m.email)}</span>
-      <span>${esc(m.role)}</span>${m.email === me.email ? "<span></span>" : `<button class="link danger" data-rm="${esc(m.email)}">remove</button>`}</div>`).join("");
+    const [mem, inv] = await Promise.all([sb.from("members").select("email, role").order("email"),
+                                          sb.from("member_invites").select("email, role").order("email")]);
+    const err = mem.error || inv.error;
+    const row = (m, pending) => `<div class="a-row"><span>${esc(m.email)}${pending ? ' <span class="help">· invited, hasn\'t signed in yet</span>' : ""}</span>
+      <span>${esc(m.role)}</span>${m.email === me.email ? "<span></span>" : `<button class="link danger" data-rm="${esc(m.email)}">remove</button>`}</div>`;
+    $("a-list").innerHTML = err ? `<span class="neg">${esc(err.message)}</span>`
+      : mem.data.map(m => row(m, false)).join("") + (inv.data || []).map(m => row(m, true)).join("");
     box.querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => {
       if (!confirm(`Remove ${b.dataset.rm}'s access to Radar?`)) return;
       const r = await sb.rpc("remove_member", { p_email: b.dataset.rm }); if (r.error) alert(r.error.message); list(); });
   };
   $("a-add").onsubmit = async e => { e.preventDefault();
-    const r = await sb.rpc("set_member", { p_email: $("a-email").value, p_role: $("a-role").value });
-    if (r.error) alert(r.error.message); else $("a-email").value = ""; list(); };
+    const email = $("a-email").value.trim(), r = await sb.rpc("set_member", { p_email: email, p_role: $("a-role").value });
+    if (r.error) alert(r.error.message);
+    else { $("a-email").value = ""; toast(r.data === "invited" ? `Invited ${email}: they'll get access when they first sign in` : `${email} now has access`); }
+    list(); };
   list();
 }
 

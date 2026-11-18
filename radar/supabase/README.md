@@ -34,15 +34,23 @@ This folder holds Radar's database design as migration files. Nothing here conta
    multi-factor authentication for everyone.
 2. **Create a project** named `radar`, region **US West** (closest to Alaska).
    The **Pro plan** is recommended: daily backups, and the project never pauses for inactivity.
-3. **Sign-in with Google Workspace:** Authentication → Providers → Google. Create the OAuth client in
-   ADN's Google Cloud with user type **Internal** so only ADN accounts can sign in. Turn off
-   email/password sign-ups.
+3. **Sign-in.** The pilot uses emailed sign-in links (on by default). In Authentication → URL Configuration
+   set the **Site URL** to where Radar is hosted (e.g. `https://ryanbinkley.github.io/First-Repo/`) and add the
+   same address under **Redirect URLs**. Once everyone has signed in once, turn off **Allow new users to sign
+   up** (Authentication → Sign In / Providers) so only existing people can get links.
+   Later: Google sign-in (Providers → Google, OAuth client with user type **Internal** in ADN's Google Cloud).
 4. **Apply the migrations** in order, with the Supabase CLI (`supabase link`, then `supabase db push`)
    or by pasting each file into the SQL editor.
 5. **Load the current forecast:** `python3 radar/tools/seed_from_json.py data.json > seed.sql`, then run
    `seed.sql` in the SQL editor. (`data.json` is the data from the latest saved Radar file; ask Claude
    to extract it.)
-6. **Add members:** after each person signs in once, add them:
+6. **Make yourself admin** (after signing in to Radar once), in the SQL editor:
+   ```sql
+   insert into public.members (user_id, email, role)
+   select id, email, 'admin' from auth.users where email = 'you@…';
+   ```
+   After that, admins add people from Radar → Settings → Access (they must have signed in once).
+   Or in SQL:
    ```sql
    insert into public.members (user_id, email, role)
    select id, email, 'editor' from auth.users where email = 'angela@…';

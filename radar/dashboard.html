@@ -186,6 +186,17 @@ dialog.modal .mlist { margin-top: 14px; font-size: 13px; border-top: 1px solid v
 dialog.modal .mlist div { padding: 2px 0; color: var(--muted); }
 table.outflows tr.wk td { border-top: 1px solid var(--border); }
 table.outflows td.when { font-family: var(--f-crt); font-size: 17px; color: var(--muted); }
+body.gated .kpis, body.gated .chartcard, body.gated .tabs, body.gated #panel, body.gated #outflows { display: none; }
+.gatecard { max-width: 460px; margin: 40px auto; }
+.gatecard h2 { margin-bottom: 10px; }
+.gatecard form { display: flex; gap: 8px; flex-wrap: wrap; }
+.gatecard input { flex: 1; min-width: 200px; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px; padding: 7px 9px; }
+body.readonly #btn-add, body.readonly #btn-undo, body.readonly .addcell, body.readonly #imp-apply, body.readonly #s-roll, body.readonly #add-rule { display: none; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 4px; padding: 9px 14px; z-index: 60; box-shadow: 0 4px 18px rgba(0,0,0,.35); }
+.a-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; padding: 3px 0; }
+.a-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.a-add input { flex: 1; min-width: 180px; }
 .dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 34px 16px;
   border: 1px dashed var(--accent); border-radius: 4px; cursor: pointer; background: var(--surface-2); text-align: center; }
 .dropzone.over, .dropzone:hover { background: var(--accent-soft); }
@@ -243,6 +254,7 @@ code { font-family: var(--f-num); }
     </div>
   </header>
   <div id="banner"></div>
+  <div id="gate"></div>
   <section class="kpis" id="kpis"></section>
   <section class="card chartcard">
     <h2>Cash scan · ending cash by week <span class="hint" id="chart-hint"></span></h2>
@@ -258,12 +270,15 @@ code { font-family: var(--f-num); }
   <section class="card" id="outflows" style="margin-top:16px"></section>
 </div>
 
+<script id="config" type="application/json">{}</script>
 <script id="state" type="application/json">{"company":"Sample Company","asOf":"2026-11-13","startingCash":432000,"minCash":100000,"weeks":13,"updatedAt":"2026-01-01T00:00:00Z","lines":[{"id":"circ","name":"Subscription receipts","kind":"in","rule":{"freq":"weekly","amount":59500},"note":""},{"id":"other_in","name":"All other deposits","kind":"in","rule":{"freq":"weekly","amount":45500},"note":""},{"id":"events_in","name":"Events receipts","kind":"in","rule":{"freq":"weekly","amount":4500},"note":""},{"id":"postage","name":"Postage","kind":"out","rule":{"freq":"weekly","amount":1500},"note":""},{"id":"payroll","name":"Payroll","kind":"out","rule":{"freq":"biweekly","amount":113500,"anchor":"2026-11-20"},"note":""},{"id":"owners","name":"Cash to owners","kind":"out","rule":{"freq":"monthly","amount":34000,"day":10,"months":[]},"note":""},{"id":"carriers","name":"Carriers","kind":"out","rule":{"freq":"biweekly","amount":8000,"anchor":"2026-11-20"},"note":""},{"id":"k401","name":"401(k) contributions","kind":"out","rule":{"freq":"biweekly","amount":8500,"anchor":"2026-11-27"},"note":""},{"id":"wcomp","name":"Workers comp insurance","kind":"out","rule":{"freq":"monthly","amount":1500,"day":"last","months":[]},"note":""},{"id":"rent_c","name":"Rent \u2013 main office","kind":"out","rule":{"freq":"monthly","amount":12000,"day":"last","months":[]},"note":""},{"id":"rent_other","name":"Other rents","kind":"out","rule":{"freq":"monthly","amount":6500,"day":"last","months":[]},"note":""},{"id":"wick","name":"Printing partner invoice","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"events_out","name":"Event costs","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"subs","name":"Software subscriptions","kind":"out","rule":{"freq":"monthly","amount":3500,"day":1,"months":[]},"note":""},{"id":"prop_tax","name":"Property taxes","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"insurance","name":"Insurance","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"est_tax","name":"Quarterly tax payments","kind":"out","rule":{"freq":"monthly","amount":114000,"day":15,"months":[1,9]},"note":""},{"id":"cc","name":"Credit card payments","kind":"out","rule":{"freq":"weekly","amount":5500},"note":""},{"id":"ap","name":"AP run \u2013 balance","kind":"out","rule":{"freq":"weekly","amount":21000},"note":""}],"overrides":{"events_in":{"2026-11-20":5500,"2026-11-27":5500,"2027-01-08":2500,"2027-01-15":2500,"2027-01-22":2500,"2027-01-29":2500,"2027-02-05":2500,"2027-02-12":0},"payroll":{"2026-11-20":115000,"2026-12-04":111500,"2026-12-18":115000,"2027-01-01":111500,"2027-01-15":115000,"2027-01-29":99500,"2027-02-12":111500},"owners":{"2027-02-12":0},"est_tax":{"2027-01-08":114000,"2027-01-15":0},"cc":{"2026-11-27":11500},"ap":{"2026-11-27":31500,"2026-12-04":19000,"2026-12-11":20000,"2026-12-25":31500,"2027-01-01":19000,"2027-01-08":20000,"2027-01-22":31500,"2027-01-29":23000,"2027-02-05":19000,"2027-02-12":19000}},"oneTime":[{"id":"o1","date":"2026-11-20","lineId":"wick","description":"Printing invoice","amount":13000},{"id":"o2","date":"2026-12-25","lineId":"wick","description":"Printing invoice","amount":7000},{"id":"o3","date":"2027-01-29","lineId":"wick","description":"Printing invoice","amount":15000},{"id":"o4","date":"2026-11-20","lineId":"events_out","description":"Event costs","amount":21000},{"id":"o5","date":"2026-11-27","lineId":"events_out","description":"Event costs","amount":14000},{"id":"o6","date":"2026-12-25","lineId":"events_out","description":"Event costs","amount":11500},{"id":"o7","date":"2027-01-29","lineId":"events_out","description":"Event costs","amount":11500},{"id":"o8","date":"2026-12-25","lineId":"subs","description":"Annual software license","amount":60000},{"id":"o9","date":"2026-11-20","lineId":"prop_tax","description":"Property taxes","amount":6500},{"id":"o10","date":"2026-11-20","lineId":"insurance","description":"Insurance renewals","amount":34000}],"lastWeek":{"weekEnding":"2026-11-13","startCash":422500,"rows":{"circ":{"forecast":59500,"actual":59000},"other_in":{"forecast":45500,"actual":46500},"events_in":{"forecast":5500,"actual":0},"postage":{"forecast":1500,"actual":1500},"owners":{"forecast":34000,"actual":35000},"k401":{"forecast":8500,"actual":7500},"wick":{"forecast":13000,"actual":0},"insurance":{"forecast":13000,"actual":14000},"cc":{"forecast":12500,"actual":13000},"ap":{"forecast":20000,"actual":24500}},"osStart":40000},"importRules":[{"id":"r1","match":"ZBA","dir":"any","account":"","lineId":"ignore"},{"id":"r2","match":"USPS","dir":"out","account":"","lineId":"postage"},{"id":"r3","match":"PAYROLL","dir":"out","account":"","lineId":"payroll"},{"id":"r4","match":"401K","dir":"out","account":"","lineId":"k401"},{"id":"r5","match":"MERCH","dir":"in","account":"","lineId":"other_in"},{"id":"r6","match":"","dir":"in","account":"","lineId":"circ"},{"id":"r7","match":"","dir":"out","account":"","lineId":"ap"}],"osChecks":50000}</script>
 <script>
 "use strict";
 // Snapshot of this file's original markup, used by "Save a copy" (must run before anything renders).
 const PRISTINE = "<!doctype html>\n" + document.documentElement.outerHTML;
 const EMBEDDED = JSON.parse(document.getElementById("state").textContent);
+const CONFIG = JSON.parse(document.getElementById("config").textContent || "{}");
+const CLOUD = !!CONFIG.supabaseUrl;
 const LS_KEY = "radar-draft:" + location.pathname;
 const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -286,9 +301,9 @@ const parseMoney = v => { const t = String(v).replace(/[$,\s]/g, ""); if (t === 
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 /* ---------------- state ---------------- */
-let state = JSON.parse(JSON.stringify(EMBEDDED));
+let state = JSON.parse(JSON.stringify(EMBEDDED || { company: "", asOf: "2026-01-02", startingCash: 0, minCash: 0, weeks: 13, lines: [] }));
 let dirty = false, restoredFrom = null, activeTab = "forecast";
-try {
+if (!CLOUD) try {
   const draft = JSON.parse(localStorage.getItem(LS_KEY) || "null");
   if (draft && draft.base === EMBEDDED.updatedAt && draft.state) { state = draft.state; dirty = true; restoredFrom = draft.savedAt; }
 } catch (e) { /* storage unavailable: fine */ }
@@ -307,7 +322,12 @@ normalize();
 let undoStack = [], lastJSON = JSON.stringify(state);
 function commit() {
   const now = JSON.stringify(state);
-  if (now !== lastJSON) { undoStack.push(lastJSON); if (undoStack.length > 40) undoStack.shift(); lastJSON = now; }
+  if (CLOUD && !canEdit()) { state = JSON.parse(lastJSON); extraOps = []; toast("You have view-only access"); return render(); }
+  if (now !== lastJSON) {
+    if (CLOUD) cloudSave(JSON.parse(lastJSON), JSON.parse(now));
+    undoStack.push(lastJSON); if (undoStack.length > 40) undoStack.shift(); lastJSON = now;
+  }
+  if (CLOUD) return render();
   dirty = true;
   try { localStorage.setItem(LS_KEY, JSON.stringify({ base: EMBEDDED.updatedAt, savedAt: new Date().toISOString(), state })); } catch (e) {}
   render();
@@ -395,6 +415,7 @@ function render() {
   $("subtitle").textContent = "Week ending " + fmtDate(state.asOf, { year: "numeric", weekday: "short" }) + " · 13 weeks through " + fmtDate(F.weeks[F.weeks.length - 1], { year: "numeric" });
   $("status").textContent = dirty ? "Unsaved changes — click Save a copy" : "All changes saved in this file";
   $("status").className = "status" + (dirty ? " dirty" : "");
+  setStatus();
   renderBanner(); renderKpis(F); renderChart(F); renderPanel(F); renderOutflows(F);
 }
 function renderBanner() {
@@ -703,7 +724,7 @@ async function addItemDialog({ lineId, week }) {
   if (type === "one") {
     let lid = fv(d, "line");
     if (lid === "__new") { lid = "l" + uid(); state.lines.push({ id: lid, name: label, kind: k, rule: { freq: "none", amount: 0 }, note: "" }); }
-    state.oneTime.push({ id: "o" + uid(), date: wk, lineId: lid, description: label, amount });
+    state.oneTime.push({ id: newId(), date: wk, lineId: lid, description: label, amount });
   } else {
     const f = fv(d, "freq"), m = D(wk).getUTCMonth() + 1, day = D(wk).getUTCDate();
     const rule = f === "weekly" ? { freq: "weekly", amount } : f === "biweekly" ? { freq: "biweekly", amount, anchor: wk }
@@ -781,7 +802,9 @@ function alignedAnchor(anchor) { const ws = weekEndings(); if (!anchor) return w
 /* ---------------- undo ---------------- */
 function undo() {
   if (!undoStack.length) return;
+  const before = lastJSON;
   state = JSON.parse(undoStack.pop()); lastJSON = JSON.stringify(state); dirty = true;
+  if (CLOUD) { cloudSave(JSON.parse(before), JSON.parse(lastJSON)); return render(); }
   try { localStorage.setItem(LS_KEY, JSON.stringify({ base: EMBEDDED.updatedAt, savedAt: new Date().toISOString(), state })); } catch (e) {}
   render();
 }
@@ -850,7 +873,7 @@ function readBankFile(text) {
   if (rows.length < 2) throw new Error("The file has no transactions in it.");
   const head = rows[0].map(h => h.trim().toLowerCase());
   const col = (...names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i; } return -1; };
-  const c = { date: col("post date", "posting date", "date"), amount: col("amount"), desc: col("description"), ref: col("reference"),
+  const c = { date: col("post date", "posting date", "date"), amount: col("amount"), desc: col("description"), ref: col("reference"), ref2: col("additional reference"), trc: col("trc number", "trc"),
     text: col("text", "memo"), acct: col("account number", "account"), name: col("account name"), type: col("type") };
   if (c.date < 0 || c.amount < 0) throw new Error("Couldn't find the \"Post Date\" and \"Amount\" columns. Is this the Northrim account activity CSV?");
   const get = (r, i) => i >= 0 ? (r[i] || "").trim() : "";
@@ -858,7 +881,7 @@ function readBankFile(text) {
     const m = get(r, c.date).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/), amount = parseMoney(get(r, c.amount));
     if (!m || amount == null || Number.isNaN(amount)) return null;
     return { n, date: `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`, amount, acct: get(r, c.acct).slice(-4),
-      acctName: get(r, c.name), desc: get(r, c.desc), ref: get(r, c.ref), text: get(r, c.text), type: get(r, c.type) };
+      acctName: get(r, c.name), desc: get(r, c.desc), ref: get(r, c.ref), ref2: get(r, c.ref2), trc: get(r, c.trc), text: get(r, c.text), type: get(r, c.type) };
   }).filter(Boolean);
 }
 function matchRule(t) {
@@ -880,7 +903,7 @@ function startImport(fileName, text) {
   try { txns = readBankFile(text); } catch (e) { alert(e.message); return; }
   if (!txns.length) { alert("No transactions found in that file."); return; }
   const lw = state.lastWeek, apLine = state.lines.find(l => l.id === "ap") || state.lines.filter(l => l.kind === "out").slice(-1)[0];
-  pendingImport = { fileName, txns, osStart: lw.osStart != null ? lw.osStart : 0, osEnd: state.osChecks != null ? state.osChecks : 0,
+  pendingImport = { fileName, text, txns, osStart: lw.osStart != null ? lw.osStart : 0, osEnd: state.osChecks != null ? state.osChecks : 0,
     osLine: apLine ? apLine.id : "" };
   categorize(pendingImport); render();
 }
@@ -912,6 +935,7 @@ function applyImport() {
   pendingImport = null; activeTab = "lastweek";
   document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x.dataset.tab === "lastweek"));
   commit();
+  if (CLOUD && canEdit()) cloudImport(pi, lw.weekEnding);
 }
 function lineOptions(sel, withIgnore) {
   return (withIgnore ? `<option value="ignore"${sel === "ignore" ? " selected" : ""}>Ignore – transfer between our accounts</option>` : "")
@@ -1011,7 +1035,7 @@ function panelImport(p) {
   p.querySelectorAll("[data-move]").forEach(b => b.onclick = () => { const [i, d] = b.dataset.move.split(":").map(Number), j = i + d;
     if (j < 0 || j >= state.importRules.length) return; const R = state.importRules; [R[i], R[j]] = [R[j], R[i]]; recat(); });
   p.querySelectorAll("[data-rdel]").forEach(b => b.onclick = () => { state.importRules.splice(Number(b.dataset.rdel), 1); recat(); });
-  $("add-rule").onclick = () => { state.importRules.unshift({ id: "r" + uid(), match: "", dir: "any", account: "", lineId: "" }); recat(); };
+  $("add-rule").onclick = () => { state.importRules.unshift({ id: newId(), match: "", dir: "any", account: "", lineId: "" }); recat(); };
 }
 
 function panelSettings(p, F) {
@@ -1036,11 +1060,12 @@ function panelSettings(p, F) {
       </ol>
       <button id="s-roll" class="primary">Start week ending ${fmtDate(F.weeks[0])} →</button>
     </div>
-    <div class="box"><h3>Saving your work</h3>
+    ${CLOUD ? `<div class="box" id="s-access"></div>` : `<div class="box"><h3>Saving your work</h3>
       <p class="help">Your edits are kept in this browser automatically, but to keep them for good (or send them to someone), click
       <b>Save a copy</b> at the top. It downloads a new version of this file with everything in it. Open that file next time.</p>
       <p class="help">Tip: name the files by week, e.g. <code>radar-${addDays(state.asOf, 7)}.html</code>.</p>
-    </div></div>`;
+    </div>`}</div>`;
+  if (CLOUD) accessBox($("s-access"));
   const num = (id, key) => $(id).addEventListener("change", e => { const v = parseMoney(e.target.value);
     if (v === null || Number.isNaN(v)) { alert("Please enter a number"); return render(); } state[key] = v; commit(); });
   num("s-cash", "startingCash"); num("s-min", "minCash"); num("s-flag", "flagMin");
@@ -1050,6 +1075,8 @@ function panelSettings(p, F) {
     const w = F.weeks[0];
     if (!confirm(`Start the week ending ${fmtDate(w, { year: "numeric" })}? The current "last week" comparison will be replaced.`)) return;
     const rows = {}; for (const l of state.lines) { const c = F.cells[l.id][w]; if (c.total) rows[l.id] = { forecast: c.total, actual: null }; }
+    if (CLOUD) extraOps.push({ t: "snapshot", asOf: state.asOf, startingCash: state.startingCash,
+      values: state.lines.flatMap(l => F.weeks.map(wk => ({ key: l.id, week: wk, amount: Math.round(F.cells[l.id][wk].total * 100) / 100 }))) });
     state.lastWeek = { weekEnding: w, startCash: state.startingCash, rows, osStart: state.osChecks || 0 };
     state.startingCash = Math.round(F.cols[0].end * 100) / 100; state.asOf = w;
     const first = addDays(w, 7);
@@ -1065,10 +1092,12 @@ function panelSettings(p, F) {
 $("btn-save").onclick = () => {
   state.updatedAt = new Date().toISOString();
   const json = JSON.stringify(state).replace(/</g, "\\u003c");
-  const html = PRISTINE.replace(/(<script id="state" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + json + b);
+  const html = PRISTINE.replace(/(<script id="state" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + json + b)
+    .replace(/(<script id="config" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + "{}" + b);
   const blob = new Blob([html], { type: "text/html" }), a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `radar-${state.asOf}.html`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  if (CLOUD) return toast("Offline backup downloaded");
   dirty = false; restoredFrom = null; render();
   $("status").textContent = "Saved — open the downloaded file next time";
 };
@@ -1080,8 +1109,195 @@ $("btn-save").onclick = () => {
   apply(t);
   btn.onclick = () => { t = t === "light" ? "dark" : "light"; apply(t); try { localStorage.setItem("radar-theme", t); } catch (e) {} };
 })();
-window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
-render();
+/* ---------------- cloud mode (Supabase) ---------------- */
+// Active only when the page is built with a Supabase URL + publishable key (build.py --cloud).
+let sb = null, me = null, myRole = null, saveChain = Promise.resolve(), saving = 0, extraOps = [], refreshTimer = null, saveError = null;
+const SB_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js";
+const canEdit = () => !CLOUD || myRole === "editor" || myRole === "admin";
+
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("Couldn't load " + src)); document.head.appendChild(s); });
+}
+function gate(html) {
+  document.body.classList.toggle("gated", !!html);
+  $("gate").innerHTML = html || "";
+}
+async function cloudStart() {
+  gate(`<div class="card gatecard"><p class="help">Connecting…</p></div>`);
+  try { await loadScript(SB_JS); } catch (e) { return gate(`<div class="card gatecard"><p class="neg">${esc(e.message)}. Check your internet connection and reload.</p></div>`); }
+  sb = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
+    auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" },
+    global: { headers: { "x-radar-via": "radar" } } });
+  sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return signInScreen();
+  me = data.session.user;
+  const who = await sb.rpc("whoami");
+  if (who.error) return gate(`<div class="card gatecard"><p class="neg">${esc(who.error.message)}</p></div>`);
+  myRole = who.data && who.data.role;
+  if (!myRole) return gate(`<div class="card gatecard"><h2>No access yet</h2>
+      <p>You're signed in as <b>${esc(me.email)}</b>, but you haven't been given access to Radar.</p>
+      <p class="help">Ask a Radar admin to add <b>${esc(me.email)}</b>.</p><button id="g-out">Sign out</button></div>`), $("g-out").onclick = () => sb.auth.signOut();
+  document.body.classList.toggle("readonly", !canEdit());
+  await reloadFromServer(true);
+  sb.channel("radar-changes")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "change_log" }, p => {
+      if (p.new && p.new.user_id === me.id) return;              // our own change: already on screen
+      scheduleRefresh(p.new && p.new.user_email);
+    }).subscribe();
+}
+function signInScreen() {
+  gate(`<div class="card gatecard"><h2>Sign in</h2>
+    <p class="help">Enter your work email and we'll send you a sign-in link.</p>
+    <form id="g-form"><input id="g-email" type="email" required placeholder="you@adn.com" autocomplete="email">
+      <button class="primary">Email me a link</button></form><p id="g-msg" class="help"></p></div>`);
+  $("g-form").onsubmit = async e => {
+    e.preventDefault();
+    const email = $("g-email").value.trim(), btn = $("g-form").querySelector("button");
+    btn.disabled = true; $("g-msg").textContent = "Sending…";
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+    btn.disabled = false;
+    $("g-msg").innerHTML = error ? `<span class="neg">${esc(error.message)}</span>` : `Check <b>${esc(email)}</b> for a sign-in link. You can close this tab.`;
+  };
+}
+async function reloadFromServer(first) {
+  const { data, error } = await sb.rpc("radar_state");
+  if (error || !data) return gate(`<div class="card gatecard"><p class="neg">Couldn't load Radar: ${esc(error ? error.message : "no data yet. Has the forecast been loaded?")}</p></div>`);
+  state = data; normalize(); lastJSON = JSON.stringify(state);
+  if (first) undoStack = [];
+  gate(""); render();
+}
+function scheduleRefresh(who) {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    const busy = saving || pendingImport || dragData || document.querySelector("dialog[open]") || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    if (busy) return scheduleRefresh(who);
+    undoStack = [];                                                 // someone else changed things: old undo steps no longer apply
+    await reloadFromServer(false);
+    toast(`Updated by ${who || "someone else"}`);
+  }, 1200);
+}
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+function newId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); });
+}
+
+// Turn "before" and "after" app states into the list of database changes.
+function diffOps(a, b) {
+  const ops = [], late = [], J = JSON.stringify;
+  const S = ["company", "asOf", "startingCash", "minCash", "flagMin", "osChecks", "weeks"];
+  if (S.some(k => J(a[k]) !== J(b[k]))) ops.push(Object.assign({ t: "settings" }, ...S.map(k => ({ [k]: b[k] }))));
+  const aL = new Map(a.lines.map((l, i) => [l.id, [l, i]])), bL = new Map(b.lines.map((l, i) => [l.id, [l, i]]));
+  const sched = l => { const m = new Map([[null, l.rule]]); (l.changes || []).forEach(c => m.set(c.from, c.rule)); return m; };
+  for (const [id, [l, i]] of bL) {
+    const p = aL.get(id);
+    if (!p || p[0].name !== l.name || p[0].kind !== l.kind || (p[0].note || "") !== (l.note || "") || p[1] !== i)
+      ops.push({ t: "line", key: id, name: l.name, kind: l.kind, note: l.note || "", sort: i * 10 });
+    const sa = p ? sched(p[0]) : new Map(), sbm = sched(l);
+    for (const [from, rule] of sbm) if (!sa.has(from) || J(sa.get(from)) !== J(rule)) ops.push({ t: "schedule", key: id, from, rule });
+    for (const from of sa.keys()) if (!sbm.has(from)) ops.push({ t: "schedule_delete", key: id, from });
+  }
+  for (const id of aL.keys()) if (!bL.has(id)) late.push({ t: "line_archive", key: id });
+  const flat = s => { const m = new Map(); for (const [k, ws] of Object.entries(s.overrides || {})) for (const [w, v] of Object.entries(ws)) m.set(k + "|" + w, v); return m; };
+  const oa = flat(a), ob = flat(b);
+  for (const [kw, v] of ob) if (oa.get(kw) !== v) { const [key, week] = kw.split("|"); ops.push({ t: "override", key, week, amount: v }); }
+  for (const kw of oa.keys()) if (!ob.has(kw) && bL.has(kw.split("|")[0])) { const [key, week] = kw.split("|"); ops.push({ t: "override_delete", key, week }); }
+  const ia = new Map(a.oneTime.map(o => [o.id, o])), ib = new Map(b.oneTime.map(o => [o.id, o]));
+  for (const [id, o] of ib) if (J(ia.get(id)) !== J(o)) ops.push({ t: "one", id, key: o.lineId, date: o.date, description: o.description || "", amount: o.amount });
+  for (const id of ia.keys()) if (!ib.has(id)) ops.push({ t: "one_delete", id });
+  const ra = new Map(a.importRules.map((r, i) => [r.id, [r, i]])), rb = new Map(b.importRules.map((r, i) => [r.id, [r, i]]));
+  for (const [id, [r, i]] of rb) { const p = ra.get(id);
+    if (r.lineId && (!p || J(p[0]) !== J(r) || p[1] !== i))      // rules with no category yet are saved once one is chosen
+      ops.push({ t: "rule", id, priority: (i + 1) * 10, match: r.match || "", dir: r.dir || "any", account: r.account || "", line: r.lineId }); }
+  for (const id of ra.keys()) if (!rb.has(id)) ops.push({ t: "rule_delete", id });
+  const la = a.lastWeek || {}, lb = b.lastWeek;
+  if (lb) {
+    if (la.weekEnding !== lb.weekEnding || la.startCash !== lb.startCash || la.osStart !== lb.osStart || a.osChecks !== b.osChecks)
+      ops.push({ t: "week", week: lb.weekEnding, startCash: lb.startCash, osStart: lb.osStart || 0, osEnd: b.osChecks || 0 });
+    const same = la.weekEnding === lb.weekEnding, src = lb.imported && (!la.imported || la.imported.at !== lb.imported.at) ? "import" : "manual";
+    const keys = new Set([...Object.keys(lb.rows || {}), ...(same ? Object.keys(la.rows || {}) : [])]);
+    for (const k of keys) {
+      const av = same && la.rows[k] ? la.rows[k].actual : null, bv = lb.rows[k] ? lb.rows[k].actual : null;
+      if (bv != null && bv !== av) ops.push({ t: "actual", week: lb.weekEnding, key: k, amount: bv, source: src });
+      else if (bv == null && av != null) ops.push({ t: "actual_delete", week: lb.weekEnding, key: k });
+    }
+  }
+  return ops.concat(late);
+}
+function setStatus() {
+  if (!CLOUD) return;
+  const el = $("status");
+  el.textContent = saveError ? "Not saved — " + saveError : saving ? "Saving…" : !canEdit() ? "View only" : "All changes saved";
+  el.className = "status" + (saveError ? " dirty" : "");
+}
+function cloudSave(before, after) {
+  const ops = diffOps(before, after).concat(extraOps.splice(0));
+  if (!ops.length) return;
+  queueCloud(async () => { const r = await sb.rpc("save_radar", { p_ops: ops }); if (r.error) throw r.error; });
+}
+function queueCloud(fn) {
+  saving++; setStatus();
+  saveChain = saveChain.then(fn).then(() => { saveError = null; }, async e => {
+    saveError = e.message || String(e);
+    alert("Radar couldn't save your last change:\n\n" + saveError + "\n\nReloading the latest saved version.");
+    undoStack = []; await reloadFromServer(false);
+  }).finally(() => { saving--; setStatus(); });
+}
+async function sha256Hex(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+// Store the original CSV and every transaction with its category.
+function cloudImport(pi, weekEnding) {
+  queueCloud(async () => {
+    const sha = await sha256Hex(pi.text), path = `${weekEnding}/${sha.slice(0, 16)}-${pi.fileName.replace(/[^\w.-]+/g, "_")}`;
+    const up = await sb.storage.from("bank-files").upload(path, new Blob([pi.text], { type: "text/csv" }), { upsert: false });
+    if (up.error && !/exists|duplicate/i.test(up.error.message)) throw up.error;
+    const seen = {}, txns = [];
+    for (const t of pi.txns) {
+      const k = [t.acct, t.date, t.amount.toFixed(2), t.desc, t.ref, t.ref2, t.text, t.type, t.trc].join("|");
+      seen[k] = (seen[k] || 0) + 1;
+      txns.push({ fp: await sha256Hex(k + "#" + seen[k]), acct: t.acct, acctName: t.acctName, date: t.date, amount: t.amount,
+        desc: t.desc, ref: t.ref, ref2: t.ref2, text: t.text, type: t.type, trc: t.trc,
+        line: t.lineId || "", manual: !!t.manual, rule: t.ruleId || "" });
+    }
+    const dates = pi.txns.map(t => t.date).sort();
+    const r = await sb.rpc("import_bank_file", { p_file: { name: pi.fileName, path, sha256: sha, firstDate: dates[0],
+      lastDate: dates[dates.length - 1], weekEnding }, p_txns: txns });
+    if (r.error) throw r.error;
+    toast(`Bank file saved: ${r.data.newTransactions} new transactions${r.data.alreadyKnown ? `, ${r.data.alreadyKnown} already on file` : ""}`);
+  });
+}
+async function accessBox(box) {
+  box.innerHTML = `<h3>Access</h3><p class="help">Signed in as <b>${esc(me.email)}</b> (${esc(myRole)}). <button class="link" id="a-out">Sign out</button></p>
+    ${myRole === "admin" ? `<div id="a-list" class="help">Loading people…</div>
+      <form id="a-add" class="a-add"><input id="a-email" type="email" placeholder="email of someone who has signed in once" required>
+        <select id="a-role"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="admin">Admin</option></select>
+        <button>Add</button></form>` : ""}`;
+  $("a-out").onclick = () => sb.auth.signOut();
+  if (myRole !== "admin") return;
+  const list = async () => {
+    const { data, error } = await sb.from("members").select("email, role").order("email");
+    $("a-list").innerHTML = error ? `<span class="neg">${esc(error.message)}</span>` : data.map(m => `<div class="a-row"><span>${esc(m.email)}</span>
+      <span>${esc(m.role)}</span>${m.email === me.email ? "<span></span>" : `<button class="link danger" data-rm="${esc(m.email)}">remove</button>`}</div>`).join("");
+    box.querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => {
+      if (!confirm(`Remove ${b.dataset.rm}'s access to Radar?`)) return;
+      const r = await sb.rpc("remove_member", { p_email: b.dataset.rm }); if (r.error) alert(r.error.message); list(); });
+  };
+  $("a-add").onsubmit = async e => { e.preventDefault();
+    const r = await sb.rpc("set_member", { p_email: $("a-email").value, p_role: $("a-role").value });
+    if (r.error) alert(r.error.message); else $("a-email").value = ""; list(); };
+  list();
+}
+
+window.addEventListener("beforeunload", e => { if (dirty || saving) { e.preventDefault(); e.returnValue = ""; } });
+if (CLOUD) { $("btn-save").textContent = "Download backup"; $("btn-save").classList.remove("primary");
+  $("btn-save").title = "Download an offline copy of the current forecast"; cloudStart(); }
+else render();
 </script>
 </body>
 </html>

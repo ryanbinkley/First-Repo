@@ -54,3 +54,10 @@ The sweep animation stops when the viewer's system asks for reduced motion.
 4. Enter end-of-week **outstanding checks** from the Cash Report. The bank file only shows what
    cleared, so the change in outstanding checks is added to the AP line to keep cash "net of O/S checks".
 5. Review, fix any category, click **Use these as last week's actuals**, then **Use as starting cash**.
+
+## Hosted version (Supabase)
+
+`python3 build.py --cloud <supabase-url> <publishable-key> docs/index.html` builds the connected page
+(no data inside). People sign in with an emailed link; edits save live to Supabase, every change is
+recorded in the change log, and other open copies update automatically. "Download backup" saves an
+offline copy. The repo's `docs/` folder can be served with GitHub Pages.

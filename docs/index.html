@@ -1,0 +1,1303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+/* RADAR — scope (default) and plotting-table (light) themes */
+:root {
+  --bg: #0a0f0b; --surface: #0f1611; --surface-2: #142017; --text: #cdeccf; --muted: #7fa386;
+  --border: #22352a; --accent: #5dff9a; --accent-ink: #04140a; --accent-soft: #10291a;
+  --pos: #5dff9a; --neg: #ff6b57; --amber: #ffb000;
+  --neg-soft: #2a1210; --warn-soft: #2a2108; --edited: #2b2408; --edited-border: #b98400;
+  --bar: #3fcf7a; --bar-low: #ff6b57; --grid: #1a2a20; --glow: 0 0 8px rgba(93,255,154,.35);
+  --scan: rgba(0,0,0,.18);
+  --f-body: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --f-crt: "VT323", ui-monospace, Menlo, Consolas, monospace;
+  --f-8bit: "Press Start 2P", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #e9e1cb; --surface: #f5efdc; --surface-2: #ece3c8; --text: #2a2a1c; --muted: #6a6448;
+  --border: #c8bb92; --accent: #4b5320; --accent-ink: #f5efdc; --accent-soft: #e2dcb8;
+  --pos: #3f6b1f; --neg: #a3271c; --amber: #9a6a00;
+  --neg-soft: #f1d6cc; --warn-soft: #f3e2a8; --edited: #f3df98; --edited-border: #b08a1c;
+  --bar: #5c6b2e; --bar-low: #a3271c; --grid: #ddd2b0; --glow: none; --scan: transparent;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--f-body); }
+:root:not([data-theme="light"]) body {
+  background: radial-gradient(ellipse at 50% -10%, #12241a 0%, var(--bg) 60%) fixed, var(--bg);
+}
+/* faint CRT scanlines, scope theme only */
+body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, var(--scan) 2px 3px); }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 60px; }
+header.top { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between;
+  margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 14px; }
+.scope { width: 54px; height: 54px; flex: none; }
+.scope .ring { fill: none; stroke: var(--accent); stroke-opacity: .35; }
+.scope .face { fill: var(--surface-2); stroke: var(--accent); stroke-opacity: .7; }
+.scope .sweep { transform-origin: 27px 27px; animation: sweep 4s linear infinite; }
+.scope .blip { fill: var(--amber); animation: blip 4s linear infinite; }
+@keyframes sweep { to { transform: rotate(360deg); } }
+@keyframes blip { 0%, 30% { opacity: 0; } 34% { opacity: 1; } 80%, 100% { opacity: .1; } }
+@media (prefers-reduced-motion: reduce) { .scope .sweep, .scope .blip { animation: none; } }
+.wordmark { font-family: var(--f-8bit); font-size: 22px; letter-spacing: .12em; color: var(--accent);
+  text-shadow: var(--glow); margin: 0; line-height: 1.2; }
+.callsign { font-family: var(--f-8bit); font-size: 8.5px; letter-spacing: .14em; color: var(--muted);
+  text-transform: uppercase; margin-top: 6px; }
+header.top .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.status { font-size: 12px; color: var(--muted); }
+.status.dirty { color: var(--amber); font-weight: 600; }
+button { font: inherit; cursor: pointer; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); padding: 7px 12px; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+:root:not([data-theme="light"]) button.primary { box-shadow: var(--glow); }
+button.link { border: none; background: none; color: var(--accent); padding: 2px 4px; }
+button.danger { color: var(--neg); }
+button.icon { padding: 3px 8px; }
+#btn-theme { font-family: var(--f-8bit); font-size: 8px; letter-spacing: .08em; padding: 9px 10px; }
+.banner { background: var(--warn-soft); border: 1px solid var(--edited-border); border-radius: 4px;
+  padding: 10px 14px; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; position: relative; }
+/* small corner ticks, like bezel markings */
+.card::before, .card::after { content: ""; position: absolute; width: 8px; height: 8px; border-color: var(--accent); opacity: .55; }
+.card::before { top: -1px; left: -1px; border-top: 1px solid; border-left: 1px solid; }
+.card::after { bottom: -1px; right: -1px; border-bottom: 1px solid; border-right: 1px solid; }
+.kpi .label { font-family: var(--f-8bit); color: var(--muted); font-size: 8.5px; text-transform: uppercase; letter-spacing: .1em; }
+.kpi .value { font-family: var(--f-crt); font-size: 44px; line-height: 1; margin-top: 10px; letter-spacing: .02em; }
+:root:not([data-theme="light"]) .kpi .value { text-shadow: 0 0 6px currentColor; }
+.kpi .note { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+.kpi.alert { border-color: var(--bar-low); background: var(--neg-soft); }
+.kpi.alert .label::before { content: "▲ CONTACT · "; color: var(--neg); }
+.pos { color: var(--pos); } .neg { color: var(--neg); }
+.row2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; margin-bottom: 16px; align-items: start; }
+.card h2 { font-family: var(--f-8bit); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; margin: 2px 0 14px; color: var(--accent); }
+.card h2 .hint { font-family: var(--f-body); font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 8px; letter-spacing: 0; text-transform: none; }
+#chart svg { width: 100%; height: auto; display: block; }
+#chart text { fill: var(--muted); font-family: var(--f-crt); font-size: 15px; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none;
+  padding: 11px 14px; color: var(--muted); white-space: nowrap; }
+.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 4px 4px; padding: 16px; }
+.help { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.legend { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 14px; height: 14px; border-radius: 2px; display: inline-block; vertical-align: middle; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 0; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 8px; background: var(--surface-2); position: sticky; top: 0; }
+.grid th { font-family: var(--f-crt); font-size: 17px; font-weight: 400; letter-spacing: .02em; }
+td.txt, th.txt { text-align: left; }
+.grid td, .edit-table td { font-family: var(--f-num); font-size: 13px; }
+.grid td:first-child, .edit-table td.txt { font-family: var(--f-body); font-size: 14px; }
+.grid th:first-child, .grid td:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1;
+  text-align: left; padding: 6px 10px; min-width: 190px; border-right: 1px solid var(--border); }
+.grid th:first-child { background: var(--surface-2); z-index: 2; }
+.grid td.num { padding: 6px 8px; }
+.grid input.cell { width: 96px; border: 1px solid transparent; background: transparent; color: var(--text);
+  text-align: right; font: 13px var(--f-num); padding: 5px 6px; border-radius: 3px; }
+.grid input.cell:hover { border-color: var(--border); }
+.grid input.cell:focus { outline: none; border-color: var(--accent); background: var(--surface-2); }
+.grid input.cell.edited { background: var(--edited); border-color: var(--edited-border); }
+.grid input.cell.zero { color: var(--muted); opacity: .6; }
+.grid input.cell.has-one { font-weight: 650; color: var(--amber); }
+.grid tr.section td { background: var(--surface-2); font-family: var(--f-8bit) !important; font-size: 8.5px !important;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 8px 10px; text-align: left; }
+.grid tr.section td:first-child { background: var(--surface-2); }
+.grid tr.total td { font-weight: 650; border-top: 1px solid var(--border); }
+.grid tr.ending td { font-weight: 700; background: var(--accent-soft); color: var(--accent); }
+.grid tr.ending td:first-child { background: var(--accent-soft); }
+.grid td.low { color: var(--neg) !important; }
+.grid td.low-bg { background: var(--neg-soft) !important; }
+.grid .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--amber); margin-left: 5px; vertical-align: middle; }
+.edit-table td { padding: 6px 6px; vertical-align: top; text-align: left; }
+.edit-table th { text-align: left; }
+.edit-table input, .edit-table select, .settings input, .settings select {
+  font: inherit; font-family: var(--f-body); color: var(--text); background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 3px; padding: 5px 7px; }
+.edit-table input.money, .settings input.money { font-family: var(--f-num); }
+.edit-table input:focus, .edit-table select:focus, .settings input:focus { outline: none; border-color: var(--accent); }
+.edit-table input.name { width: 200px; }
+.edit-table input.money { width: 110px; text-align: right; }
+.edit-table input.note { width: 100%; min-width: 220px; }
+.edit-table td.when { min-width: 260px; }
+.months { display: flex; gap: 2px; margin-top: 6px; flex-wrap: wrap; }
+.months label { font-size: 11px; border: 1px solid var(--border); border-radius: 2px; padding: 1px 5px; cursor: pointer; user-select: none; }
+.months label.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.months input { display: none; }
+.next { color: var(--muted); font-size: 12px; margin-top: 4px; }
+tr.past td { opacity: .5; }
+.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.settings label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.settings input { width: 100%; }
+.settings .box { border: 1px solid var(--border); border-radius: 4px; padding: 14px; }
+.settings .box h3 { font-family: var(--f-8bit); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.chartcard { margin-bottom: 16px; }
+.grid td.c { padding: 3px 6px; vertical-align: top; position: relative; min-width: 104px; }
+.grid td.c .amt { display: block; padding: 4px 6px; border: 1px solid transparent; border-radius: 3px; cursor: pointer; font-family: var(--f-num); font-size: 13px; }
+.grid td.c .amt:hover { border-color: var(--accent); }
+.grid td.c .amt[draggable=true] { cursor: grab; }
+.grid td.c .amt.edited { background: var(--edited); border-color: var(--edited-border); }
+.grid td.c .amt.zero { color: var(--muted); text-decoration: line-through; }
+.grid td.c .empty { display: block; padding: 4px 6px; color: var(--muted); opacity: .5; }
+.chip { display: block; margin: 2px 0 0 auto; width: fit-content; padding: 1px 8px; border-radius: 10px; background: var(--warn-soft);
+  border: 1px solid var(--edited-border); color: var(--amber); font: 600 12px var(--f-num); cursor: grab; }
+.chip.demo { display: inline-block; margin: 0 2px 0 0; cursor: default; }
+.grid td.c .dragging { opacity: .35; }
+.grid td.c.over { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
+.grid .addcell { position: absolute; left: 2px; top: 4px; width: 18px; height: 18px; padding: 0; line-height: 16px; font-size: 13px;
+  border-radius: 50%; opacity: 0; color: var(--accent); border-color: var(--accent); background: var(--surface); }
+.grid td.c:hover .addcell, .grid .addcell:focus { opacity: 1; }
+.grid input.cellin { width: 96px; font: 13px var(--f-num); text-align: right; padding: 4px 6px; border: 1px solid var(--accent); border-radius: 3px; background: var(--surface-2); color: var(--text); }
+.grid .linename { background: none; border: none; padding: 0; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.grid .linename:hover { color: var(--accent); text-decoration: underline; }
+.grid .freq { display: block; font-size: 11px; color: var(--muted); }
+button:disabled { opacity: .4; cursor: default; }
+dialog.modal { border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); color: var(--text); padding: 0; width: min(460px, calc(100vw - 32px)); }
+dialog.modal::backdrop { background: rgba(0,0,0,.55); }
+dialog.modal form { padding: 18px 18px 14px; }
+dialog.modal h3 { font-family: var(--f-8bit); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
+dialog.modal label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+dialog.modal input:not([type=radio]):not([type=checkbox]), dialog.modal select { width: 100%; font: inherit; color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 3px; padding: 6px 8px; }
+dialog.modal input.money { font-family: var(--f-num); text-align: right; }
+dialog.modal .two { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
+dialog.modal .seg { display: flex; gap: 16px; margin: 6px 0 2px; }
+dialog.modal .seg label { display: inline-flex; gap: 6px; align-items: center; margin: 0; color: var(--text); font-size: 14px; }
+dialog.modal .months label { display: inline-block; margin: 0; }
+dialog.modal .mbtns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+dialog.modal .mbtns .danger { margin-right: auto; }
+dialog.modal .merr { color: var(--neg); font-size: 13px; margin-top: 10px; }
+dialog.modal .mlist { margin-top: 14px; font-size: 13px; border-top: 1px solid var(--grid); padding-top: 8px; }
+dialog.modal .mlist div { padding: 2px 0; color: var(--muted); }
+table.outflows tr.wk td { border-top: 1px solid var(--border); }
+table.outflows td.when { font-family: var(--f-crt); font-size: 17px; color: var(--muted); }
+body.gated .kpis, body.gated .chartcard, body.gated .tabs, body.gated #panel, body.gated #outflows { display: none; }
+.gatecard { max-width: 460px; margin: 40px auto; }
+.gatecard h2 { margin-bottom: 10px; }
+.gatecard form { display: flex; gap: 8px; flex-wrap: wrap; }
+.gatecard input { flex: 1; min-width: 200px; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px; padding: 7px 9px; }
+body.readonly #btn-add, body.readonly #btn-undo, body.readonly .addcell, body.readonly #imp-apply, body.readonly #s-roll, body.readonly #add-rule { display: none; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 4px; padding: 9px 14px; z-index: 60; box-shadow: 0 4px 18px rgba(0,0,0,.35); }
+.a-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; padding: 3px 0; }
+.a-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.a-add input { flex: 1; min-width: 180px; }
+.dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 34px 16px;
+  border: 1px dashed var(--accent); border-radius: 4px; cursor: pointer; background: var(--surface-2); text-align: center; }
+.dropzone.over, .dropzone:hover { background: var(--accent-soft); }
+.dz-title { font-family: var(--f-8bit); font-size: 10px; letter-spacing: .1em; color: var(--accent); text-transform: uppercase; }
+.subhead { font-family: var(--f-8bit); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+.subhead .help { font-family: var(--f-body); text-transform: none; letter-spacing: 0; font-size: 12px; margin-left: 8px; }
+table.mini td, table.mini th { padding: 6px 10px; font-family: var(--f-num); font-size: 13px; }
+table.mini td.txt { font-family: var(--f-body); }
+table.mini tr.total td { border-top: 1px solid var(--border); }
+table.tx td { vertical-align: top; }
+.txlist summary { cursor: pointer; margin-bottom: 10px; }
+table.tx td.desc { white-space: normal; min-width: 260px; }
+table.tx select { font: inherit; font-family: var(--f-body); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px; padding: 4px 6px; max-width: 260px; }
+table.tx tr.ignored td { opacity: .45; }
+table.tx tr.unassigned td { background: var(--warn-soft); }
+code { font-family: var(--f-num); }
+@media (max-width: 900px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .kpi .value { font-size: 34px; }
+  .wordmark { font-size: 18px; }
+  .grid th:first-child, .grid td:first-child { min-width: 140px; }
+}
+@media print {
+  body::after { display: none; }
+  .actions, .tabs button:not(.active), .banner { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg class="scope" viewBox="0 0 54 54" aria-hidden="true">
+        <defs><linearGradient id="sw" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="var(--accent)" stop-opacity="0"/><stop offset="1" stop-color="var(--accent)" stop-opacity=".55"/></linearGradient></defs>
+        <circle class="face" cx="27" cy="27" r="25"/>
+        <circle class="ring" cx="27" cy="27" r="17"/><circle class="ring" cx="27" cy="27" r="9"/>
+        <line class="ring" x1="2" y1="27" x2="52" y2="27"/><line class="ring" x1="27" y1="2" x2="27" y2="52"/>
+        <g class="sweep"><path d="M27 27 L27 2 A25 25 0 0 1 48.6 14.5 Z" fill="url(#sw)"/><line x1="27" y1="27" x2="48.6" y2="14.5" stroke="var(--accent)" stroke-width="1.5"/></g>
+        <circle class="blip" cx="38" cy="18" r="2"/>
+      </svg>
+      <div>
+        <h1 class="wordmark">RADAR</h1>
+        <div class="callsign" id="title">Cash threat detection</div>
+        <div class="sub" id="subtitle"></div>
+      </div>
+    </div>
+    <div class="actions">
+      <span class="status" id="status"></span>
+      <button id="btn-theme" class="icon" title="Switch between the radar scope and the plotting table view">TABLE</button>
+      <button id="btn-save" class="primary" title="Download a copy of this dashboard with all your changes saved in it">Save a copy</button>
+    </div>
+  </header>
+  <div id="banner"></div>
+  <div id="gate"></div>
+  <section class="kpis" id="kpis"></section>
+  <section class="card chartcard">
+    <h2>Cash scan · ending cash by week <span class="hint" id="chart-hint"></span></h2>
+    <div id="chart"></div>
+  </section>
+  <nav class="tabs" id="tabs">
+    <button data-tab="forecast" class="active">13-week forecast</button>
+    <button data-tab="lastweek">Last week vs. forecast</button>
+    <button data-tab="import">Bank import</button>
+    <button data-tab="settings">Settings &amp; new week</button>
+  </nav>
+  <section class="panel" id="panel"></section>
+  <section class="card" id="outflows" style="margin-top:16px"></section>
+</div>
+
+<script id="config" type="application/json">{"supabaseUrl":"https://cnatoenuiukoxphkoxpf.supabase.co","supabaseKey":"sb_publishable_qcqJTyYA9KooWYRNUPJskQ_CXKXp8hs"}</script>
+<script id="state" type="application/json">null</script>
+<script>
+"use strict";
+// Snapshot of this file's original markup, used by "Save a copy" (must run before anything renders).
+const PRISTINE = "<!doctype html>\n" + document.documentElement.outerHTML;
+const EMBEDDED = JSON.parse(document.getElementById("state").textContent);
+const CONFIG = JSON.parse(document.getElementById("config").textContent || "{}");
+const CLOUD = !!CONFIG.supabaseUrl;
+const LS_KEY = "radar-draft:" + location.pathname;
+const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------------- dates ---------------- */
+const DAY = 864e5;
+const D = s => { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+const iso = dt => dt.toISOString().slice(0, 10);
+const addDays = (s, n) => iso(new Date(D(s).getTime() + n * DAY));
+const daysBetween = (a, b) => Math.round((D(b) - D(a)) / DAY);
+const fmtDate = (s, opts) => D(s).toLocaleDateString("en-US", Object.assign({ month: "short", day: "numeric", timeZone: "UTC" }, opts || {}));
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+/* ---------------- money ---------------- */
+const fmt = n => (Math.round(n) < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
+const fmtNum = n => Math.round(n).toLocaleString("en-US");
+const fmtK = n => { const a = Math.abs(n), s = n < 0 ? "-$" : "$";
+  return a >= 1e6 ? s + (a / 1e6).toFixed(2) + "M" : a >= 1e4 ? s + Math.round(a / 1e3) + "k" : s + Math.round(a).toLocaleString("en-US"); };
+const parseMoney = v => { const t = String(v).replace(/[$,\s]/g, ""); if (t === "") return null;
+  const neg = /^\(.*\)$/.test(t); const n = Number(t.replace(/[()]/g, "")); return isNaN(n) ? NaN : (neg ? -n : n); };
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ---------------- state ---------------- */
+let state = JSON.parse(JSON.stringify(EMBEDDED || { company: "", asOf: "2026-01-02", startingCash: 0, minCash: 0, weeks: 13, lines: [] }));
+let dirty = false, restoredFrom = null, activeTab = "forecast";
+if (!CLOUD) try {
+  const draft = JSON.parse(localStorage.getItem(LS_KEY) || "null");
+  if (draft && draft.base === EMBEDDED.updatedAt && draft.state) { state = draft.state; dirty = true; restoredFrom = draft.savedAt; }
+} catch (e) { /* storage unavailable: fine */ }
+function normalize() {
+  state.overrides = state.overrides || {}; state.oneTime = state.oneTime || [];
+  state.lastWeek = state.lastWeek || { weekEnding: state.asOf, startCash: state.startingCash, rows: {} };
+  state.weeks = state.weeks || 13;
+  if (!state.importRules) {
+    const firstIn = state.lines.find(l => l.kind === "in"), lastOut = state.lines.filter(l => l.kind === "out").slice(-1)[0];
+    state.importRules = [{ id: "r1", match: "ZBA", dir: "any", account: "", lineId: "ignore" },
+      { id: "r2", match: "", dir: "in", account: "", lineId: firstIn ? firstIn.id : "" },
+      { id: "r3", match: "", dir: "out", account: "", lineId: lastOut ? lastOut.id : "" }];
+  }
+}
+normalize();
+let undoStack = [], lastJSON = JSON.stringify(state);
+function commit() {
+  const now = JSON.stringify(state);
+  if (CLOUD && !canEdit()) { state = JSON.parse(lastJSON); extraOps = []; toast("You have view-only access"); return render(); }
+  if (now !== lastJSON) {
+    if (CLOUD) cloudSave(JSON.parse(lastJSON), JSON.parse(now));
+    undoStack.push(lastJSON); if (undoStack.length > 40) undoStack.shift(); lastJSON = now;
+  }
+  if (CLOUD) return render();
+  dirty = true;
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ base: EMBEDDED.updatedAt, savedAt: new Date().toISOString(), state })); } catch (e) {}
+  render();
+}
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+/* ---------------- forecast engine ---------------- */
+function weekEndings() { const out = []; for (let i = 1; i <= state.weeks; i++) out.push(addDays(state.asOf, 7 * i)); return out; }
+// Week (in `weeks`) whose 7-day span contains `date`; null if outside the forecast.
+function weekEndingOf(date) { return addDays(state.asOf, 7 * Math.ceil(daysBetween(state.asOf, date) / 7)); }
+function weekFor(date, weeks) { const w = weekEndingOf(date); return weeks.includes(w) ? w : null; }
+function activeRule(line, w) { let r = line.rule; for (const c of (line.changes || [])) if (c.from <= w) r = c.rule; return r; }
+function lineOccurrences(line, weeks) {
+  const ch = line.changes || [], occs = [line.rule].concat(ch.map(c => c.rule)).map(r => ruleOccurrences(r, weeks)), out = {};
+  for (const w of weeks) { let i = 0; ch.forEach((c, k) => { if (c.from <= w) i = k + 1; }); if (occs[i][w]) out[w] = occs[i][w]; }
+  return out;
+}
+function ruleOccurrences(rule, weeks) {
+  const hits = {};
+  if (!rule || !rule.amount || !weeks.length) return hits;
+  const sh = rule.shift | 0;
+  if (sh) { // schedule moved by whole weeks: compute on a wider window, then slide
+    const ext = []; for (let i = -Math.abs(sh); i < weeks.length + Math.abs(sh); i++) ext.push(addDays(weeks[0], 7 * i));
+    for (const [w, v] of Object.entries(ruleOccurrences(Object.assign({}, rule, { shift: 0 }), ext))) {
+      const nw = addDays(w, 7 * sh); if (weeks.includes(nw)) hits[nw] = (hits[nw] || 0) + v; }
+    return hits;
+  }
+  if (rule.freq === "weekly") weeks.forEach(w => hits[w] = rule.amount);
+  else if (rule.freq === "biweekly" && rule.anchor) weeks.forEach(w => { if (((daysBetween(rule.anchor, w) % 14) + 14) % 14 < 7) hits[w] = rule.amount; });
+  else if (rule.freq === "monthly") {
+    const months = rule.months && rule.months.length ? rule.months : [1,2,3,4,5,6,7,8,9,10,11,12];
+    const start = D(addDays(weeks[0], -7)), end = D(weeks[weeks.length - 1]);
+    for (let y = start.getUTCFullYear(), m = start.getUTCMonth(); y < end.getUTCFullYear() || (y === end.getUTCFullYear() && m <= end.getUTCMonth()); m++) {
+      if (m > 11) { m = 0; y++; }
+      if (!months.includes(m + 1)) continue;
+      const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      let w;
+      if (rule.day === "last") {
+        // last week of the month = the last week-ending date that falls in this month
+        w = weekEndingOf(iso(new Date(Date.UTC(y, m, lastDay))));
+        if (D(w).getUTCMonth() !== m) w = addDays(w, -7);
+        if (!weeks.includes(w)) w = null;
+      } else {
+        w = weekFor(iso(new Date(Date.UTC(y, m, Math.min(Number(rule.day) || 1, lastDay)))), weeks);
+      }
+      if (w) hits[w] = (hits[w] || 0) + rule.amount;
+    }
+  }
+  return hits;
+}
+function compute() {
+  const weeks = weekEndings();
+  const cells = {}; // lineId -> week -> {rule, override, base, ones[], total}
+  for (const line of state.lines) {
+    const occ = lineOccurrences(line, weeks), ov = state.overrides[line.id] || {};
+    cells[line.id] = {};
+    for (const w of weeks) {
+      const rule = occ[w] || 0, has = Object.prototype.hasOwnProperty.call(ov, w);
+      cells[line.id][w] = { rule, override: has ? ov[w] : null, base: has ? ov[w] : rule, ones: [], total: 0 };
+    }
+  }
+  for (const o of state.oneTime) {
+    const w = weekFor(o.date, weeks);
+    if (w && cells[o.lineId]) cells[o.lineId][w].ones.push(o);
+  }
+  const cols = []; let cash = state.startingCash;
+  for (const w of weeks) {
+    let cin = 0, cout = 0;
+    for (const line of state.lines) {
+      const c = cells[line.id][w]; c.total = c.base + c.ones.reduce((s, o) => s + Number(o.amount || 0), 0);
+      if (line.kind === "in") cin += c.total; else cout += c.total;
+    }
+    const start = cash; cash = start + cin - cout;
+    cols.push({ week: w, start, cin, cout, net: cin - cout, end: cash });
+  }
+  return { weeks, cells, cols };
+}
+window.__forecast = compute; window.__state = () => state; // handy for checks
+
+/* ---------------- rendering ---------------- */
+const $ = id => document.getElementById(id);
+function render() {
+  const F = compute();
+  $("title").textContent = "Cash threat detection" + (state.company ? " · " + state.company : "");
+  $("subtitle").textContent = "Week ending " + fmtDate(state.asOf, { year: "numeric", weekday: "short" }) + " · 13 weeks through " + fmtDate(F.weeks[F.weeks.length - 1], { year: "numeric" });
+  $("status").textContent = dirty ? "Unsaved changes — click Save a copy" : "All changes saved in this file";
+  $("status").className = "status" + (dirty ? " dirty" : "");
+  setStatus();
+  renderBanner(); renderKpis(F); renderChart(F); renderPanel(F); renderOutflows(F);
+}
+function renderBanner() {
+  $("banner").innerHTML = restoredFrom
+    ? `<div class="banner"><span>Showing your edits from ${esc(new Date(restoredFrom).toLocaleString())} that haven't been saved to a file yet.</span>
+       <button id="btn-discard" class="link">Discard edits</button></div>` : "";
+  const b = $("btn-discard");
+  if (b) b.onclick = () => { if (!confirm("Discard all unsaved edits and go back to this file's saved version?")) return;
+    try { localStorage.removeItem(LS_KEY); } catch (e) {} state = JSON.parse(JSON.stringify(EMBEDDED)); normalize(); undoStack = []; lastJSON = JSON.stringify(state); dirty = false; restoredFrom = null; render(); };
+}
+function lastWeekTotals() {
+  const lw = state.lastWeek, r = { fIn: 0, fOut: 0, aIn: 0, aOut: 0, hasActual: false };
+  for (const line of state.lines) {
+    const row = lw.rows[line.id]; if (!row) continue;
+    const f = Number(row.forecast || 0), a = row.actual == null || row.actual === "" ? null : Number(row.actual);
+    if (a != null) r.hasActual = true;
+    if (line.kind === "in") { r.fIn += f; r.aIn += a || 0; } else { r.fOut += f; r.aOut += a || 0; }
+  }
+  r.fEnd = lw.startCash + r.fIn - r.fOut; r.aEnd = lw.startCash + r.aIn - r.aOut; return r;
+}
+function renderKpis(F) {
+  const low = F.cols.reduce((m, c) => c.end < m.end ? c : m, F.cols[0]);
+  const last = F.cols[F.cols.length - 1];
+  const below = F.cols.find(c => c.end < state.minCash);
+  const lw = lastWeekTotals(), varc = lw.aEnd - lw.fEnd;
+  $("kpis").innerHTML = `
+    <div class="card kpi"><div class="label">Cash today</div><div class="value">${fmtK(state.startingCash)}</div>
+      <div class="note">Net of reserve, as of ${fmtDate(state.asOf)}</div></div>
+    <div class="card kpi ${low.end < state.minCash ? "alert" : ""}"><div class="label">Lowest point</div><div class="value ${low.end < state.minCash ? "neg" : ""}">${fmtK(low.end)}</div>
+      <div class="note">Week ending ${fmtDate(low.week)}${below ? ` · <span class="neg">below ${fmtK(state.minCash)} cushion from ${fmtDate(below.week)}</span>` : ` · stays above ${fmtK(state.minCash)} cushion`}</div></div>
+    <div class="card kpi"><div class="label">In 13 weeks</div><div class="value">${fmtK(last.end)}</div>
+      <div class="note"><span class="${last.end - state.startingCash >= 0 ? "pos" : "neg"}">${last.end - state.startingCash >= 0 ? "+" : ""}${fmtK(last.end - state.startingCash)}</span> vs. today</div></div>
+    <div class="card kpi"><div class="label">Last week vs. forecast</div>
+      <div class="value ${lw.hasActual ? (varc >= 0 ? "pos" : "neg") : ""}">${lw.hasActual ? (varc >= 0 ? "+" : "") + fmtK(varc) : "—"}</div>
+      <div class="note">${lw.hasActual ? `Ended ${fmtK(lw.aEnd)} vs. ${fmtK(lw.fEnd)} forecast` : "Enter actuals in the Last week tab"}</div></div>`;
+}
+function renderChart(F) {
+  const W = 1100, H = 240, padL = 56, padR = 12, padT = 14, padB = 30;
+  const vals = F.cols.map(c => c.end).concat([state.minCash, 0]);
+  let max = Math.max(...vals), min = Math.min(...vals);
+  const step = niceStep((max - min) / 4); max = Math.ceil(max / step) * step; min = Math.floor(min / step) * step;
+  const y = v => padT + (H - padT - padB) * (1 - (v - min) / (max - min || 1));
+  const bw = (W - padL - padR) / F.cols.length;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Projected ending cash by week">`;
+  for (let v = min; v <= max + 1; v += step)
+    s += `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${padL - 6}" y="${y(v) + 4}" text-anchor="end">${fmtK(v)}</text>`;
+  const low = F.cols.reduce((m, c) => c.end < m.end ? c : m, F.cols[0]);
+  F.cols.forEach((c, i) => {
+    const x = padL + i * bw + bw * 0.18, w = bw * 0.64, y0 = y(0), y1 = y(c.end);
+    const color = c.end < state.minCash ? "var(--bar-low)" : "var(--bar)";
+    s += `<rect x="${x}" y="${Math.min(y0, y1)}" width="${w}" height="${Math.max(1, Math.abs(y1 - y0))}" rx="3" fill="${color}">
+      <title>Week ending ${fmtDate(c.week)}: ${fmt(c.end)}\nIn ${fmt(c.cin)} · Out ${fmt(c.cout)}</title></rect>`;
+    if (i % (F.cols.length > 8 && W < 600 ? 2 : 1) === 0) s += `<text x="${x + w / 2}" y="${H - 10}" text-anchor="middle">${fmtDate(c.week)}</text>`;
+    if (c === low) s += `<circle cx="${x + w / 2}" cy="${y1}" r="4" fill="var(--bar-low)">${REDUCED ? "" : '<animate attributeName="r" values="4;9;4" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;.2;1" dur="2s" repeatCount="indefinite"/>'}</circle>`;
+    if (c === low) s += `<text x="${x + w / 2}" y="${Math.min(y0, y1) - 5}" text-anchor="middle" style="fill:var(--text);font-weight:600">${fmtK(c.end)}</text>`;
+  });
+  s += `<line x1="${padL}" x2="${W - padR}" y1="${y(state.minCash)}" y2="${y(state.minCash)}" stroke="var(--amber)" stroke-dasharray="5 4" stroke-width="1.5"/>
+    <rect x="${padL + 2}" y="${y(state.minCash) - 17}" width="${(15 + fmtK(state.minCash).length) * 7.6 + 8}" height="14" fill="var(--surface)" opacity=".9"/>
+    <text x="${padL + 6}" y="${y(state.minCash) - 6}" text-anchor="start" style="fill:var(--amber)">MINIMUM CUSHION ${fmtK(state.minCash)}</text>`;
+  $("chart").innerHTML = s + "</svg>";
+  $("chart-hint").textContent = "hover a bar for details";
+}
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw || 1))), n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+const FREQ = { weekly: "Every week", biweekly: "Every other week", monthly: "Monthly / quarterly / yearly", none: "No schedule (one-time items only)" };
+/* ---------------- significant future outflows ---------------- */
+function periodLabel(r) {
+  const n = (r.months || []).length;
+  return n === 0 || n === 12 ? "Monthly" : n === 4 ? "Quarterly" : n === 1 ? "Yearly" : n === 2 ? "Twice a year" : "Periodic";
+}
+function significantOutflows(F) {
+  const min = state.flagMin != null ? state.flagMin : 10000, items = [];
+  for (const w of F.weeks) for (const line of state.lines) {
+    if (line.kind !== "out") continue;
+    const c = F.cells[line.id][w], r = activeRule(line, w);
+    for (const o of c.ones) if (Number(o.amount) >= min) items.push({ w, name: o.description || line.name, line: line.name, why: "One-time", amt: Number(o.amount) });
+    if (c.override != null) {
+      if (c.override >= min && c.override - c.rule >= min)
+        items.push({ w, name: line.name, line: "", why: c.rule ? "Adjusted · usually " + fmtK(c.rule) : "Added by hand", amt: c.override });
+    } else if (r.freq === "monthly" && c.rule >= min) items.push({ w, name: line.name, line: "", why: periodLabel(r), amt: c.rule });
+  }
+  return { items, min };
+}
+function renderOutflows(F) {
+  const { items, min } = significantOutflows(F), total = items.reduce((s, i) => s + i.amt, 0);
+  let lastW = null;
+  $("outflows").innerHTML = `<h2>Significant future outflows <span class="hint">next 13 weeks · ${fmtK(min)}+ · one-time, hand-adjusted and monthly/quarterly/yearly items</span></h2>
+    ${items.length ? `<div class="scroll"><table class="mini outflows"><thead><tr><th class="txt">Week ending</th><th class="txt">Item</th><th class="txt">Why it's flagged</th><th>Amount</th></tr></thead><tbody>
+      ${items.map(i => { const first = i.w !== lastW; lastW = i.w;
+        return `<tr class="${first ? "wk" : ""}"><td class="txt when">${first ? fmtDate(i.w) : ""}</td>
+          <td class="txt">${esc(i.name)}${i.line && i.line !== i.name ? ` <span class="help">· ${esc(i.line)}</span>` : ""}</td>
+          <td class="txt help">${esc(i.why)}</td><td class="neg">−${fmt(i.amt)}</td></tr>`; }).join("")}
+      <tr class="total"><td class="txt" colspan="3"><b>${items.length} items</b></td><td class="neg"><b>−${fmt(total)}</b></td></tr>
+    </tbody></table></div>` : `<p class="help">Nothing unusual over ${fmtK(min)} in the next 13 weeks.</p>`}`;
+}
+
+/* ---------------- tabs ---------------- */
+$("tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (!b) return;
+  activeTab = b.dataset.tab; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x === b)); render(); });
+function renderPanel(F) {
+  ({ forecast: panelForecast, lastweek: panelLastWeek, import: panelImport, settings: panelSettings })[activeTab]($("panel"), F);
+}
+
+/* ---------------- dialogs ---------------- */
+function modal({ title, body, buttons, onOpen }) {
+  return new Promise(resolve => {
+    const d = document.createElement("dialog"); d.className = "modal";
+    d.innerHTML = `<form method="dialog"><h3>${esc(title)}</h3><div class="mbody">${body}</div><div class="merr" hidden></div>
+      <div class="mbtns">${buttons.map((b, i) => `<button value="${i}" class="${b.cls || ""}" ${b.skipCheck ? "formnovalidate" : ""}>${esc(b.label)}</button>`).join("")}</div></form>`;
+    document.body.appendChild(d);
+    d.querySelector("form").addEventListener("submit", e => {
+      const b = buttons[Number(e.submitter && e.submitter.value)];
+      const err = b && b.validate ? b.validate(d) : null;
+      if (err) { e.preventDefault(); const m = d.querySelector(".merr"); m.textContent = err; m.hidden = false; }
+    });
+    d.addEventListener("close", () => { const b = buttons[Number(d.returnValue)]; d.remove(); resolve({ value: b ? b.value : null, d }); });
+    if (onOpen) onOpen(d);
+    d.showModal();
+    const first = d.querySelector(".mbody input:not([type=radio]):not([type=checkbox]), .mbody select");
+    (first || d.querySelector(".mbtns .primary") || d.querySelector(".mbtns button:last-child")).focus();
+  });
+}
+const fv = (d, name) => { const el = d.querySelector(`[name="${name}"]`); return el ? el.value : ""; };
+const moneyCheck = (d, name) => { const v = parseMoney(fv(d, name)); return v == null || Number.isNaN(v) ? "Please enter an amount, e.g. 25000" : null; };
+const weekOptions = (sel, extra) => (extra && !weekEndings().includes(extra) ? `<option value="${extra}" selected>${fmtDate(extra, { year: "numeric" })} (outside forecast)</option>` : "")
+  + weekEndings().map(w => `<option value="${w}"${w === sel ? " selected" : ""}>Week ending ${fmtDate(w, { year: "numeric" })}</option>`).join("");
+async function askScope(title, text, allowFuture) {
+  const buttons = [{ label: "Cancel", value: null, skipCheck: true }, { label: "Just this week", value: "one", cls: allowFuture ? "" : "primary" }];
+  if (allowFuture) buttons.push({ label: "This and all future weeks", value: "future", cls: "primary" });
+  return (await modal({ title, body: `<p>${text}</p>`, buttons })).value;
+}
+
+/* ---------------- schedule helpers ---------------- */
+function addChange(line, from, rule) {
+  line.changes = (line.changes || []).filter(c => c.from < from);
+  line.changes.push({ from, rule: JSON.parse(JSON.stringify(rule)) });
+  line.changes.sort((a, b) => a.from < b.from ? -1 : 1);
+}
+function setOverride(lineId, w, v, ruleAmt) {
+  const ov = state.overrides[lineId] = state.overrides[lineId] || {};
+  if (v == null || v === ruleAmt) delete ov[w]; else ov[w] = v;
+  if (!Object.keys(ov).length) delete state.overrides[lineId];
+}
+function futureOverrides(lineId, from) { return Object.keys(state.overrides[lineId] || {}).filter(k => k >= from); }
+
+async function editRecurring(F, lineId, w, v) {
+  const line = state.lines.find(l => l.id === lineId), c = F.cells[lineId][w], r = activeRule(line, w);
+  if (v === null) { setOverride(lineId, w, null); return commit(); }          // cleared → back to usual
+  if (v === c.base) return render();
+  if (r.freq === "none") { setOverride(lineId, w, v, 0); return commit(); }
+  const extra = futureOverrides(lineId, addDays(w, 1)).length;
+  const scope = await askScope(`Change ${line.name}`,
+    `Change <b>${esc(line.name)}</b> in the week ending ${fmtDate(w)} from <b>${fmt(c.base)}</b> to <b>${fmt(v)}</b>?<br>
+     <span class="help">"All future weeks" changes the usual amount from this week on${extra ? ` and clears ${extra} hand-adjusted later week(s)` : ""}. Earlier weeks keep the old amount.</span>`, true);
+  if (scope === "one") setOverride(lineId, w, v, c.rule);
+  else if (scope === "future") {
+    addChange(line, w, Object.assign({}, r, { amount: v, freq: r.freq }));
+    for (const k of futureOverrides(lineId, w)) delete state.overrides[lineId][k];
+    if (state.overrides[lineId] && !Object.keys(state.overrides[lineId]).length) delete state.overrides[lineId];
+  } else return render();
+  commit();
+}
+async function moveRecurring(F, lineId, from, to) {
+  const line = state.lines.find(l => l.id === lineId), a = F.cells[lineId][from], b = F.cells[lineId][to], r = activeRule(line, from);
+  const delta = daysBetween(from, to) / 7, canShift = (r.freq === "biweekly" || r.freq === "monthly") && a.override == null;
+  const scope = await askScope(`Move ${line.name}`,
+    `Move <b>${esc(line.name)}</b> (${fmt(a.base)}) from the week ending ${fmtDate(from)} to the week ending ${fmtDate(to)}?` +
+    (canShift ? `<br><span class="help">"All future weeks" shifts the whole schedule by ${Math.abs(delta)} week(s) ${delta > 0 ? "later" : "earlier"} from here on.</span>` : ""), canShift);
+  if (scope === "one") {
+    setOverride(lineId, from, a.rule ? 0 : null, a.rule);
+    setOverride(lineId, to, b.base + a.base, b.rule);
+  } else if (scope === "future") {
+    const start = from < to ? from : to;
+    const nr = Object.assign({}, r);
+    if (r.freq === "biweekly") nr.anchor = addDays(r.anchor || from, 7 * delta); else nr.shift = (r.shift || 0) + delta;
+    addChange(line, start, nr);
+    const ov = state.overrides[lineId];
+    if (ov) { const moved = {}; for (const [k, v] of Object.entries(ov)) { if (k >= from) moved[addDays(k, 7 * delta)] = v; else if (!(k in moved)) moved[k] = v; }
+      state.overrides[lineId] = moved; }
+  } else return render();
+  commit();
+}
+
+/* ---------------- forecast grid ---------------- */
+let dragData = null;
+function panelForecast(p, F) {
+  const head = `<tr><th>Week ending</th>${F.weeks.map(w => `<th>${fmtDate(w)}</th>`).join("")}</tr>`;
+  const cell = (line, w) => {
+    const c = F.cells[line.id][w], r = activeRule(line, w);
+    let h = "";
+    if (c.rule || c.override != null) {
+      const tip = (c.override != null ? `Adjusted by hand · usually ${fmt(c.rule)}` : `Usual ${FREQ_SHORT[r.freq] || ""} amount`) + " — click to change, drag to move";
+      h += `<span class="amt${c.override != null ? " edited" : ""}${c.base === 0 ? " zero" : ""}" draggable="${c.base ? "true" : "false"}" data-rec="1" title="${esc(tip)}">${c.base ? fmtNum(c.base) : "0"}</span>`;
+    }
+    for (const o of c.ones) h += `<span class="chip" draggable="true" data-one="${o.id}" title="${esc((o.description || line.name) + " · one-time — click to edit, drag to move")}">${fmtNum(o.amount)}</span>`;
+    if (!h) h = `<span class="empty">–</span>`;
+    return `<td class="c" data-line="${line.id}" data-week="${w}">${h}<button class="addcell" data-add title="Add an item in this week">+</button></td>`;
+  };
+  const lineRow = line => `<tr><td><button class="linename" data-lineedit="${line.id}" title="${esc(line.note || "Click to edit this line")}">${esc(line.name)}</button>${line.note ? '<span class="dot"></span>' : ""}
+      <span class="freq">${esc(describeFreq(activeRule(line, F.weeks[0])))}</span></td>${F.weeks.map(w => cell(line, w)).join("")}</tr>`;
+  const totRow = (label, key, cls) => `<tr class="${cls || "total"}"><td>${label}</td>${F.cols.map(c => {
+    const low = key === "end" && c.end < state.minCash;
+    return `<td class="num ${low ? "low low-bg" : ""}">${fmt(c[key])}</td>`; }).join("")}</tr>`;
+  const ins = state.lines.filter(l => l.kind === "in"), outs = state.lines.filter(l => l.kind === "out");
+  p.innerHTML = `
+    <div class="toolbar">
+      <p class="help" style="margin:0">Click a number to change it, drag it to another week to move it.
+        <span class="legend"><span class="swatch" style="background:var(--edited);border:1px solid var(--edited-border)"></span>adjusted by hand</span> ·
+        <span class="legend"><span class="chip demo">5,000</span>one-time item</span> · click a line name to edit its schedule.</p>
+      <div class="actions"><button id="btn-undo" ${undoStack.length ? "" : "disabled"} title="Undo the last change (Ctrl/Cmd+Z)">↶ Undo</button>
+        <button id="btn-add" class="primary">+ Add item</button></div>
+    </div>
+    <div class="scroll"><table class="grid">
+      <thead>${head}</thead><tbody>
+      ${totRow("Starting cash", "start", "total")}
+      <tr class="section"><td colspan="${F.weeks.length + 1}">Cash in</td></tr>
+      ${ins.map(lineRow).join("")}
+      ${totRow("Total cash in", "cin")}
+      <tr class="section"><td colspan="${F.weeks.length + 1}">Cash out</td></tr>
+      ${outs.map(lineRow).join("")}
+      ${totRow("Total cash out", "cout")}
+      ${totRow("Net change", "net")}
+      ${totRow("Ending cash", "end", "ending")}
+      </tbody></table></div>`;
+
+  $("btn-add").onclick = () => addItemDialog({});
+  $("btn-undo").onclick = undo;
+  p.querySelectorAll("[data-lineedit]").forEach(b => b.onclick = () => lineDialog(b.dataset.lineedit));
+  p.querySelectorAll("[data-add]").forEach(b => b.onclick = e => { const td = b.closest("td"); e.stopPropagation();
+    addItemDialog({ lineId: td.dataset.line, week: td.dataset.week }); });
+  p.querySelectorAll("[data-one]").forEach(ch => ch.onclick = () => oneTimeDialog(ch.dataset.one));
+  p.querySelectorAll("span.amt").forEach(sp => sp.onclick = () => {
+    const td = sp.closest("td"), { line, week } = td.dataset, c = F.cells[line][week];
+    const inp = document.createElement("input"); inp.className = "cellin"; inp.inputMode = "decimal";
+    inp.value = String(Math.round(c.base * 100) / 100); sp.replaceWith(inp); inp.focus(); inp.select();
+    let done = false;
+    const finish = save => { if (done) return; done = true; if (!save) return render();
+      const v = parseMoney(inp.value); if (Number.isNaN(v)) { alert("Please enter a number, e.g. 25000"); return render(); }
+      editRecurring(F, line, week, v); };
+    inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); finish(true); } if (e.key === "Escape") { e.preventDefault(); finish(false); } };
+    inp.onblur = () => finish(true);
+  });
+  // drag & drop
+  p.querySelectorAll("[draggable=true]").forEach(el => el.addEventListener("dragstart", e => {
+    const td = el.closest("td");
+    dragData = el.dataset.one ? { type: "one", id: el.dataset.one, line: td.dataset.line, week: td.dataset.week } : { type: "rec", line: td.dataset.line, week: td.dataset.week };
+    e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "radar"); el.classList.add("dragging");
+  }));
+  p.querySelectorAll("[draggable=true]").forEach(el => el.addEventListener("dragend", () => { el.classList.remove("dragging"); dragData = null;
+    p.querySelectorAll("td.over").forEach(t => t.classList.remove("over")); }));
+  const canDrop = td => { if (!dragData) return false;
+    if (dragData.type === "rec") return td.dataset.line === dragData.line && td.dataset.week !== dragData.week;
+    const a = state.lines.find(l => l.id === dragData.line), b = state.lines.find(l => l.id === td.dataset.line);
+    return a && b && a.kind === b.kind && !(td.dataset.line === dragData.line && td.dataset.week === dragData.week); };
+  p.querySelectorAll("td.c").forEach(td => {
+    td.addEventListener("dragover", e => { if (canDrop(td)) { e.preventDefault(); td.classList.add("over"); } });
+    td.addEventListener("dragleave", () => td.classList.remove("over"));
+    td.addEventListener("drop", e => { e.preventDefault(); td.classList.remove("over"); if (!canDrop(td)) return;
+      const dd = dragData; dragData = null;
+      if (dd.type === "one") { const o = state.oneTime.find(x => x.id === dd.id);
+        o.date = addDays(o.date, daysBetween(dd.week, td.dataset.week)); o.lineId = td.dataset.line; commit(); }
+      else moveRecurring(F, dd.line, dd.week, td.dataset.week);
+    });
+  });
+}
+const FREQ_SHORT = { weekly: "weekly", biweekly: "every-other-week", monthly: "monthly", none: "" };
+function describeFreq(r) {
+  if (!r || r.freq === "none" || !r.amount) return r && r.freq === "none" ? "one-time items" : "";
+  const amt = fmtK(r.amount);
+  if (r.freq === "weekly") return amt + " weekly";
+  if (r.freq === "biweekly") return amt + " every other week";
+  const when = r.day === "last" ? "last week" : "on the " + ordinal(Number(r.day) || 1);
+  const n = (r.months || []).length;
+  return amt + " " + (n === 0 || n === 12 ? "monthly" : (r.months || []).map(m => MONTHS[m - 1]).join("/")) + " " + when;
+}
+const ordinal = n => n + (n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th");
+
+/* ---------------- add / edit dialogs ---------------- */
+async function addItemDialog({ lineId, week }) {
+  const pre = state.lines.find(l => l.id === lineId), kind = pre ? pre.kind : "out", w = week || weekEndings()[0];
+  const lineOpts = k => state.lines.filter(l => l.kind === k).map(l => `<option value="${l.id}"${pre && l.id === pre.id ? " selected" : ""}>${esc(l.name)}</option>`).join("")
+    + `<option value="__new">+ New line (uses the label)</option>`;
+  const { value, d } = await modal({ title: "Add an item", buttons: [{ label: "Cancel", value: null, skipCheck: true },
+      { label: "Add", value: "add", cls: "primary", validate: d => !fv(d, "label").trim() ? "Please give it a label" : moneyCheck(d, "amount") }],
+    body: `<div class="seg"><label><input type="radio" name="kind" value="out"${kind === "out" ? " checked" : ""}> Cash out</label>
+             <label><input type="radio" name="kind" value="in"${kind === "in" ? " checked" : ""}> Cash in</label></div>
+      <label>Label</label><input name="label" placeholder="e.g. Roof repair" autofocus>
+      <div class="two"><div><label>Amount</label><input name="amount" class="money" inputmode="decimal" placeholder="0"></div>
+        <div><label>Week</label><select name="week">${weekOptions(w)}</select></div></div>
+      <div class="seg"><label><input type="radio" name="type" value="one" checked> One-time</label>
+        <label><input type="radio" name="type" value="rec"> Recurring</label></div>
+      <div data-show="one"><label>Put it under</label><select name="line"></select></div>
+      <div data-show="rec" hidden><label>How often</label><select name="freq">
+        <option value="weekly">Every week</option><option value="biweekly">Every other week</option>
+        <option value="monthly">Monthly (same week each month)</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>
+        <p class="help" style="margin:6px 0 0">Starts in the chosen week and becomes its own line in the forecast.</p></div>`,
+    onOpen: d => {
+      const sync = () => { const k = d.querySelector("[name=kind]:checked").value, t = d.querySelector("[name=type]:checked").value, sel = d.querySelector("[name=line]");
+        const keep = sel.value; sel.innerHTML = lineOpts(k); if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
+        d.querySelectorAll("[data-show]").forEach(x => x.hidden = x.dataset.show !== t); };
+      d.querySelectorAll("input[type=radio]").forEach(r => r.onchange = sync); sync();
+      if (pre) d.querySelector("[name=label]").value = "";
+    } });
+  if (value !== "add") return;
+  const k = d.querySelector("[name=kind]:checked").value, type = d.querySelector("[name=type]:checked").value;
+  const label = fv(d, "label").trim(), amount = parseMoney(fv(d, "amount")), wk = fv(d, "week");
+  if (type === "one") {
+    let lid = fv(d, "line");
+    if (lid === "__new") { lid = "l" + uid(); state.lines.push({ id: lid, name: label, kind: k, rule: { freq: "none", amount: 0 }, note: "" }); }
+    state.oneTime.push({ id: newId(), date: wk, lineId: lid, description: label, amount });
+  } else {
+    const f = fv(d, "freq"), m = D(wk).getUTCMonth() + 1, day = D(wk).getUTCDate();
+    const rule = f === "weekly" ? { freq: "weekly", amount } : f === "biweekly" ? { freq: "biweekly", amount, anchor: wk }
+      : { freq: "monthly", amount, day, months: f === "monthly" ? [] : f === "yearly" ? [m] : [0, 3, 6, 9].map(x => ((m - 1 + x) % 12) + 1).sort((a, b) => a - b) };
+    const line = { id: "l" + uid(), name: label, kind: k, rule: { freq: "none", amount: 0 }, note: "" };
+    if (wk === weekEndings()[0]) line.rule = rule; else line.changes = [{ from: wk, rule }];
+    state.lines.push(line);
+  }
+  commit();
+}
+async function oneTimeDialog(id) {
+  const o = state.oneTime.find(x => x.id === id); if (!o) return;
+  const line = state.lines.find(l => l.id === o.lineId), cur = weekEndingOf(o.date);
+  const { value, d } = await modal({ title: "One-time item", buttons: [{ label: "Delete", value: "del", cls: "danger", skipCheck: true },
+      { label: "Cancel", value: null, skipCheck: true }, { label: "Save", value: "save", cls: "primary", validate: d => moneyCheck(d, "amount") }],
+    body: `<label>Label</label><input name="label" value="${esc(o.description)}">
+      <div class="two"><div><label>Amount</label><input name="amount" class="money" value="${fmtNum(o.amount)}"></div>
+        <div><label>Week</label><select name="week">${weekOptions(cur, cur)}</select></div></div>
+      <label>Put it under</label><select name="line">${state.lines.filter(l => l.kind === (line ? line.kind : "out")).map(l =>
+        `<option value="${l.id}"${l.id === o.lineId ? " selected" : ""}>${esc(l.name)}</option>`).join("")}</select>` });
+  if (value === "del") { state.oneTime = state.oneTime.filter(x => x.id !== id); return commit(); }
+  if (value !== "save") return;
+  o.description = fv(d, "label").trim(); o.amount = parseMoney(fv(d, "amount")); o.lineId = fv(d, "line");
+  const nw = fv(d, "week"); if (nw !== cur) o.date = addDays(o.date, daysBetween(cur, nw));
+  commit();
+}
+async function lineDialog(lineId) {
+  const line = state.lines.find(l => l.id === lineId), weeks = weekEndings();
+  // edit the schedule in effect for the first forecast week; later scheduled changes are listed separately
+  const curChange = (line.changes || []).filter(c => c.from <= weeks[0]).slice(-1)[0], r = curChange ? curChange.rule : line.rule;
+  const later = (line.changes || []).filter(c => c.from > weeks[0]);
+  const ones = state.oneTime.filter(o => o.lineId === lineId).sort((a, b) => a.date < b.date ? -1 : 1);
+  const days = ['<option value="last"' + (r.day === "last" ? " selected" : "") + ">Last week of month</option>"]
+    .concat(Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}"${String(r.day) === String(i + 1) ? " selected" : ""}>Due on the ${ordinal(i + 1)}</option>`));
+  const { value, d } = await modal({ title: line.name, buttons: [{ label: "Delete line", value: "del", cls: "danger", skipCheck: true },
+      { label: "Cancel", value: null, skipCheck: true }, { label: "Save", value: "save", cls: "primary", validate: d => fv(d, "freq") !== "none" ? moneyCheck(d, "amount") : null }],
+    body: `<label>Name</label><input name="name" value="${esc(line.name)}">
+      <div class="two"><div><label>Cash in / out</label><select name="kind"><option value="out"${line.kind === "out" ? " selected" : ""}>Cash out</option><option value="in"${line.kind === "in" ? " selected" : ""}>Cash in</option></select></div>
+        <div><label>Usual amount</label><input name="amount" class="money" value="${r.amount ? fmtNum(r.amount) : ""}"></div></div>
+      <label>How often</label><select name="freq">${Object.entries(FREQ).map(([k, v]) => `<option value="${k}"${r.freq === k ? " selected" : ""}>${v}</option>`).join("")}</select>
+      <div data-f="biweekly"><label>A week it's paid</label><select name="anchor">${weekOptions(alignedAnchor(r.anchor))}</select></div>
+      <div data-f="monthly"><label>When in the month</label><select name="day">${days.join("")}</select>
+        <div class="months">${MONTHS.map((m, k) => `<label class="${(r.months || []).includes(k + 1) ? "on" : ""}"><input type="checkbox" name="m" value="${k + 1}" ${(r.months || []).includes(k + 1) ? "checked" : ""}>${m}</label>`).join("")}</div>
+        <p class="help" style="margin:4px 0 0">No months selected = every month. Pick months for quarterly or yearly items.</p></div>
+      <label>Notes</label><input name="note" value="${esc(line.note)}" placeholder="Reminder for yourself">
+      ${later.length ? `<div class="mlist"><b>Scheduled changes</b>${later.map((c, i) => `<div>From ${fmtDate(c.from)}: ${esc(describeFreq(c.rule))}
+        <button type="button" class="link danger" data-rmchange="${i}">remove</button></div>`).join("")}</div>` : ""}
+      ${ones.length ? `<div class="mlist"><b>One-time items</b>${ones.map(o => `<div>${fmtDate(o.date)} · ${esc(o.description)} · ${fmt(o.amount)}</div>`).join("")}</div>` : ""}`,
+    onOpen: d => {
+      const sync = () => d.querySelectorAll("[data-f]").forEach(x => x.hidden = x.dataset.f !== fv(d, "freq"));
+      d.querySelector("[name=freq]").onchange = sync; sync();
+      d.querySelectorAll(".months input").forEach(cb => cb.onchange = () => cb.parentElement.classList.toggle("on", cb.checked));
+      d.querySelectorAll("[data-rmchange]").forEach(b => b.onclick = () => { const c = later[Number(b.dataset.rmchange)];
+        line.changes = line.changes.filter(x => x !== c); b.parentElement.remove(); });
+    } });
+  if (value === "del") {
+    const n = ones.length;
+    if (!confirm(`Delete "${line.name}"?` + (n ? ` Its ${n} one-time item(s) will also be removed.` : ""))) return render();
+    state.lines = state.lines.filter(l => l !== line); delete state.overrides[lineId]; state.oneTime = state.oneTime.filter(o => o.lineId !== lineId);
+    return commit();
+  }
+  if (value !== "save") return commit(); // removed scheduled changes still count
+  line.name = fv(d, "name").trim() || line.name; line.kind = fv(d, "kind"); line.note = fv(d, "note");
+  const f = fv(d, "freq"), nr = { freq: f, amount: f === "none" ? 0 : parseMoney(fv(d, "amount")) || 0 };
+  if (f === "biweekly") nr.anchor = fv(d, "anchor");
+  if (f === "monthly") { nr.day = fv(d, "day") === "last" ? "last" : Number(fv(d, "day")); nr.months = [...d.querySelectorAll(".months input:checked")].map(x => Number(x.value));
+    if (r.freq === "monthly" && r.day === nr.day && r.shift) nr.shift = r.shift; }
+  if (curChange) curChange.rule = nr; else line.rule = nr;
+  commit();
+}
+// a biweekly anchor expressed as one of the visible week endings
+function alignedAnchor(anchor) { const ws = weekEndings(); if (!anchor) return ws[0];
+  return ws.find(w => ((daysBetween(anchor, w) % 14) + 14) % 14 < 7) || ws[0]; }
+
+/* ---------------- undo ---------------- */
+function undo() {
+  if (!undoStack.length) return;
+  const before = lastJSON;
+  state = JSON.parse(undoStack.pop()); lastJSON = JSON.stringify(state); dirty = true;
+  if (CLOUD) { cloudSave(JSON.parse(before), JSON.parse(lastJSON)); return render(); }
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ base: EMBEDDED.updatedAt, savedAt: new Date().toISOString(), state })); } catch (e) {}
+  render();
+}
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && !document.querySelector("dialog[open]")) {
+    e.preventDefault(); undo(); }
+});
+
+
+function panelLastWeek(p) {
+  const lw = state.lastWeek, t = lastWeekTotals();
+  const row = l => { const r = lw.rows[l.id] || {}; const f = Number(r.forecast || 0), a = r.actual == null || r.actual === "" ? null : Number(r.actual);
+    const v = a == null ? null : a - f, good = v == null ? null : (l.kind === "in" ? v >= 0 : v <= 0);
+    if (!f && a == null) return "";
+    return `<tr><td class="txt" style="padding:6px 10px">${esc(l.name)}</td><td style="padding:6px 10px">${fmt(f)}</td>
+      <td style="padding:4px 6px"><input class="money" data-line="${l.id}" value="${a == null ? "" : fmtNum(a)}" placeholder="enter"></td>
+      <td style="padding:6px 10px" class="${v == null ? "" : good ? "pos" : "neg"}">${v == null ? "" : (v > 0 ? "+" : "") + fmt(v)}</td></tr>`; };
+  const others = state.lines.filter(l => !(lw.rows[l.id] && (lw.rows[l.id].forecast || lw.rows[l.id].actual != null)));
+  const tot = (label, f, a, outward) => { const v = a - f, good = outward ? v <= 0 : v >= 0;
+    return `<tr class="total"><td class="txt" style="padding:6px 10px"><b>${label}</b></td><td style="padding:6px 10px"><b>${fmt(f)}</b></td>
+    <td style="padding:6px 10px"><b>${fmt(a)}</b></td><td style="padding:6px 10px" class="${good ? "pos" : "neg"}"><b>${v > 0 ? "+" : ""}${fmt(v)}</b></td></tr>`; };
+  p.innerHTML = `
+    <p class="help">Week ending <b>${fmtDate(lw.weekEnding, { year: "numeric" })}</b>. Variance = actual − forecast; <span class="pos">green</span> is good for cash
+      (more came in, or less went out, than planned). Import the Northrim file in <b>Bank import</b>, or type actuals here.
+      ${lw.imported ? `<br>Imported from ${esc(lw.imported.fileName)} (${lw.imported.count} transactions).` : ""}</p>
+    <div class="scroll edit-table"><table><thead><tr><th class="txt">Line item</th><th>Forecast</th><th>Actual</th><th>Variance</th></tr></thead><tbody>
+      <tr><td class="txt" style="padding:6px 10px">Starting cash</td><td style="padding:6px 10px">${fmt(lw.startCash)}</td><td style="padding:6px 10px">${fmt(lw.startCash)}</td><td></td></tr>
+      <tr class="section"><td colspan="4" class="txt" style="padding:6px 10px;color:var(--muted);font-size:12px">CASH IN</td></tr>
+      ${state.lines.filter(l => l.kind === "in").map(row).join("")}
+      ${tot("Total cash in", t.fIn, t.aIn, false)}
+      <tr class="section"><td colspan="4" class="txt" style="padding:6px 10px;color:var(--muted);font-size:12px">CASH OUT</td></tr>
+      ${state.lines.filter(l => l.kind === "out").map(row).join("")}
+      ${tot("Total cash out", t.fOut, t.aOut, true)}
+      ${tot("Ending cash", t.fEnd, t.aEnd, false)}
+    </tbody></table></div>
+    ${others.length ? `<div style="margin-top:12px" class="help">Add an actual for another line:
+      <select id="lw-add"><option value="">Choose…</option>${others.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join("")}</select></div>` : ""}
+    ${Math.abs(t.aEnd - state.startingCash) > 1 && t.hasActual ? `<div class="banner" style="margin-top:12px">Actual ending cash (${fmt(t.aEnd)}) differs from the starting cash used in the forecast (${fmt(state.startingCash)}).
+      <button id="lw-use" class="link">Use ${fmt(t.aEnd)} as starting cash</button></div>` : ""}`;
+  p.querySelectorAll("input[data-line]").forEach(el => el.addEventListener("change", () => {
+    const v = parseMoney(el.value); if (Number.isNaN(v)) { alert("Please enter a number"); return render(); }
+    const r = lw.rows[el.dataset.line] = lw.rows[el.dataset.line] || { forecast: 0 }; r.actual = v; commit(); }));
+  const add = $("lw-add"); if (add) add.onchange = () => { if (add.value) { lw.rows[add.value] = { forecast: 0, actual: 0 }; commit(); } };
+  const use = $("lw-use"); if (use) use.onclick = () => { state.startingCash = Math.round(t.aEnd * 100) / 100; commit(); };
+}
+
+/* ---------------- bank import ---------------- */
+let pendingImport = null;
+function parseCSV(text) {
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ",") { row.push(f); f = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(f); f = "";
+      if (row.some(c => c.trim() !== "")) rows.push(row); row = []; }
+    else f += ch;
+  }
+  row.push(f); if (row.some(c => c.trim() !== "")) rows.push(row);
+  return rows;
+}
+const squash = s => String(s || "").toUpperCase().replace(/\s+/g, " ").trim();
+function readBankFile(text) {
+  const rows = parseCSV(text.replace(/^﻿/, ""));
+  if (rows.length < 2) throw new Error("The file has no transactions in it.");
+  const head = rows[0].map(h => h.trim().toLowerCase());
+  const col = (...names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i; } return -1; };
+  const c = { date: col("post date", "posting date", "date"), amount: col("amount"), desc: col("description"), ref: col("reference"), ref2: col("additional reference"), trc: col("trc number", "trc"),
+    text: col("text", "memo"), acct: col("account number", "account"), name: col("account name"), type: col("type") };
+  if (c.date < 0 || c.amount < 0) throw new Error("Couldn't find the \"Post Date\" and \"Amount\" columns. Is this the Northrim account activity CSV?");
+  const get = (r, i) => i >= 0 ? (r[i] || "").trim() : "";
+  return rows.slice(1).map((r, n) => {
+    const m = get(r, c.date).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/), amount = parseMoney(get(r, c.amount));
+    if (!m || amount == null || Number.isNaN(amount)) return null;
+    return { n, date: `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`, amount, acct: get(r, c.acct).slice(-4),
+      acctName: get(r, c.name), desc: get(r, c.desc), ref: get(r, c.ref), ref2: get(r, c.ref2), trc: get(r, c.trc), text: get(r, c.text), type: get(r, c.type) };
+  }).filter(Boolean);
+}
+function matchRule(t) {
+  const hay = squash([t.ref, t.desc, t.text, t.type].join(" "));
+  for (const r of state.importRules) {
+    if (r.dir === "in" && t.amount <= 0) continue;
+    if (r.dir === "out" && t.amount >= 0) continue;
+    if (r.account && !t.acct.endsWith(String(r.account).trim())) continue;
+    if (r.match && !hay.includes(squash(r.match))) continue;
+    return r;
+  }
+  return null;
+}
+function categorize(pi) {
+  for (const t of pi.txns) if (!t.manual) { const r = matchRule(t); t.ruleId = r ? r.id : null; t.lineId = r ? r.lineId : ""; }
+}
+function startImport(fileName, text) {
+  let txns;
+  try { txns = readBankFile(text); } catch (e) { alert(e.message); return; }
+  if (!txns.length) { alert("No transactions found in that file."); return; }
+  const lw = state.lastWeek, apLine = state.lines.find(l => l.id === "ap") || state.lines.filter(l => l.kind === "out").slice(-1)[0];
+  pendingImport = { fileName, text, txns, osStart: lw.osStart != null ? lw.osStart : 0, osEnd: state.osChecks != null ? state.osChecks : 0,
+    osLine: apLine ? apLine.id : "" };
+  categorize(pendingImport); render();
+}
+function importSummary(pi) {
+  const sums = {}, lineById = Object.fromEntries(state.lines.map(l => [l.id, l]));
+  let ignoredNet = 0, ignored = 0, unassigned = 0, bankNet = 0;
+  const lw = state.lastWeek, from = addDays(lw.weekEnding, -6);
+  const outside = pi.txns.filter(t => t.date < from || t.date > lw.weekEnding).length;
+  for (const t of pi.txns) {
+    bankNet += t.amount;
+    if (t.lineId === "ignore") { ignored++; ignoredNet += t.amount; continue; }
+    const l = lineById[t.lineId]; if (!l) { unassigned++; continue; }
+    sums[l.id] = (sums[l.id] || 0) + (l.kind === "in" ? t.amount : -t.amount);
+  }
+  const osChange = (Number(pi.osEnd) || 0) - (Number(pi.osStart) || 0), bankOnly = Object.assign({}, sums);
+  if (osChange && lineById[pi.osLine]) sums[pi.osLine] = (sums[pi.osLine] || 0) + (lineById[pi.osLine].kind === "out" ? osChange : -osChange);
+  let tin = 0, tout = 0; for (const [id, v] of Object.entries(sums)) lineById[id].kind === "in" ? tin += v : tout += v;
+  return { sums, bankOnly, ignored, ignoredNet, unassigned, outside, bankNet, osChange, tin, tout, end: lw.startCash + tin - tout };
+}
+function applyImport() {
+  const pi = pendingImport, s = importSummary(pi), lw = state.lastWeek;
+  if (s.unassigned && !confirm(`${s.unassigned} transaction(s) have no category and will be left out. Continue?`)) return;
+  for (const l of state.lines) {
+    if (s.sums[l.id] != null) { const r = lw.rows[l.id] = lw.rows[l.id] || { forecast: 0 }; r.actual = Math.round(s.sums[l.id] * 100) / 100; }
+    else if (lw.rows[l.id]) lw.rows[l.id].actual = 0;
+  }
+  lw.osStart = Number(pi.osStart) || 0; state.osChecks = Number(pi.osEnd) || 0;
+  lw.imported = { fileName: pi.fileName, count: pi.txns.length, at: new Date().toISOString() };
+  pendingImport = null; activeTab = "lastweek";
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x.dataset.tab === "lastweek"));
+  commit();
+  if (CLOUD && canEdit()) cloudImport(pi, lw.weekEnding);
+}
+function lineOptions(sel, withIgnore) {
+  return (withIgnore ? `<option value="ignore"${sel === "ignore" ? " selected" : ""}>Ignore – transfer between our accounts</option>` : "")
+    + `<option value=""${!sel ? " selected" : ""}>— needs a category —</option>`
+    + state.lines.map(l => `<option value="${l.id}"${l.id === sel ? " selected" : ""}>${esc(l.name)} (${l.kind})</option>`).join("");
+}
+function panelImport(p) {
+  const lw = state.lastWeek;
+  let html = "";
+  if (!pendingImport) {
+    html += `<p class="help">Download the account activity CSV from Northrim for the week ending <b>${fmtDate(lw.weekEnding, { year: "numeric" })}</b>
+      (all accounts in one file), then drop it here. You'll see every transaction and where it's going before anything changes.</p>
+      <label class="dropzone" id="drop"><input type="file" id="file" accept=".csv,text/csv" hidden>
+        <span class="dz-title">Drop the Northrim CSV here</span><span class="help" style="margin:0">or click to choose a file</span></label>
+      ${lw.imported ? `<p class="help" style="margin-top:10px">Last import: ${esc(lw.imported.fileName)} · ${lw.imported.count} transactions · ${esc(new Date(lw.imported.at).toLocaleString())}</p>` : ""}`;
+  } else {
+    const pi = pendingImport, s = importSummary(pi), lineById = Object.fromEntries(state.lines.map(l => [l.id, l]));
+    const dates = pi.txns.map(t => t.date).sort(), accts = [...new Set(pi.txns.map(t => (t.acctName ? t.acctName + " " : "") + "…" + t.acct))];
+    const warn = [];
+    if (s.outside) warn.push(`${s.outside} transaction(s) are dated outside the week ${fmtDate(addDays(lw.weekEnding, -6))}–${fmtDate(lw.weekEnding)}. Check you downloaded the right week, or start the new week first (Settings).`);
+    if (s.unassigned) warn.push(`${s.unassigned} transaction(s) need a category – pick one below, or add a rule.`);
+    if (Math.abs(s.ignoredNet) > 0.5) warn.push(`Transfers marked "ignore" don't net to zero (${fmt(s.ignoredNet)}). Some money may have moved to an account that isn't in this file.`);
+    const rowsIds = state.lines.filter(l => s.sums[l.id] != null || (lw.rows[l.id] && lw.rows[l.id].forecast));
+    const sumRow = l => { const f = lw.rows[l.id] ? Number(lw.rows[l.id].forecast || 0) : 0, b = s.bankOnly[l.id] || 0, a = s.sums[l.id] || 0;
+      return `<tr><td class="txt">${esc(l.name)}</td><td>${fmt(f)}</td><td>${fmt(b)}</td><td>${a !== b ? (a - b > 0 ? "+" : "") + fmt(a - b) : ""}</td><td><b>${fmt(a)}</b></td></tr>`; };
+    const txs = pi.txns.slice().sort((a, b) => a.acct < b.acct ? -1 : a.acct > b.acct ? 1 : a.date < b.date ? -1 : a.date > b.date ? 1 : a.n - b.n);
+    html += `
+      <div class="toolbar"><div><b>${esc(pi.fileName)}</b> · ${pi.txns.length} transactions · ${fmtDate(dates[0])}–${fmtDate(dates[dates.length - 1])}
+        <div class="help" style="margin:2px 0 0">${accts.map(esc).join(" · ")}</div></div>
+        <div class="actions"><button id="imp-cancel">Cancel</button><button id="imp-apply" class="primary">Use these as last week's actuals</button></div></div>
+      ${warn.map(w => `<div class="banner">${esc(w)}</div>`).join("")}
+      <div class="settings" style="margin-bottom:14px">
+        <div class="box"><h3>Outstanding checks</h3>
+          <p class="help">Checks written but not yet cleared the bank. The bank file only shows what cleared; this keeps the forecast on the same
+            "net of outstanding checks" basis as the Cash Report.</p>
+          <label>Start of week</label><input class="money" id="os-start" value="${fmtNum(pi.osStart || 0)}">
+          <div style="height:8px"></div>
+          <label>End of week (Cash Report: O/S Checks &amp; Wires)</label><input class="money" id="os-end" value="${fmtNum(pi.osEnd || 0)}">
+          <div style="height:8px"></div>
+          <label>Count the change as</label><select id="os-line" style="width:100%">${lineOptions(pi.osLine)}</select>
+        </div>
+        <div class="box"><h3>Check figures</h3>
+          <table class="mini"><tbody>
+            <tr><td class="txt">Starting cash</td><td>${fmt(lw.startCash)}</td></tr>
+            <tr><td class="txt">Net change per bank file</td><td>${fmt(s.bankNet - s.ignoredNet)}</td></tr>
+            <tr><td class="txt">Less increase in outstanding checks</td><td>${fmt(-s.osChange)}</td></tr>
+            <tr class="total"><td class="txt"><b>Actual ending cash</b></td><td><b>${fmt(s.end)}</b></td></tr>
+            <tr><td class="txt">Forecast had</td><td>${fmt(lastWeekTotals().fEnd)}</td></tr>
+            <tr><td class="txt">Transfers between accounts (ignored)</td><td>${s.ignored} · net ${fmt(s.ignoredNet)}</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+      <div class="scroll" style="margin-bottom:14px"><table class="mini"><thead><tr><th class="txt">Line item</th><th>Forecast</th><th>From bank file</th><th>O/S checks</th><th>Actual</th></tr></thead>
+        <tbody>${rowsIds.map(sumRow).join("")}
+        <tr class="total"><td class="txt"><b>Total cash in</b></td><td></td><td></td><td></td><td><b>${fmt(s.tin)}</b></td></tr>
+        <tr class="total"><td class="txt"><b>Total cash out</b></td><td></td><td></td><td></td><td><b>${fmt(s.tout)}</b></td></tr></tbody></table></div>
+      <details class="txlist" ${s.unassigned ? "open" : ""}><summary class="subhead">Transactions (${pi.txns.length}) <span class="help">click to ${s.unassigned ? "hide" : "review"} · change a category here for this import only, or add a rule below to do it every week</span></summary>
+      <div class="scroll"><table class="mini tx"><thead><tr><th class="txt">Date</th><th class="txt">Account</th><th class="txt">Description</th><th>Amount</th><th class="txt">Goes to</th></tr></thead><tbody>
+      ${txs.map(t => { const r = state.importRules.find(x => x.id === t.ruleId);
+        return `<tr class="${t.lineId === "ignore" ? "ignored" : !t.lineId ? "unassigned" : ""}"><td class="txt">${fmtDate(t.date)}</td><td class="txt">…${esc(t.acct)}</td>
+        <td class="txt desc" title="${esc(t.text)}">${esc(t.desc)}<br><span class="help">${esc((t.text || t.ref).replace(/\s+/g, " ").slice(0, 70))}</span></td>
+        <td class="${t.amount >= 0 ? "pos" : ""}">${fmt(t.amount)}</td>
+        <td class="txt"><select data-tx="${t.n}">${lineOptions(t.lineId, true)}</select>
+          <div class="help" style="margin:2px 0 0">${t.manual ? "changed by hand" : r ? "rule: " + esc(r.match || "(anything)") + (r.account ? " · …" + esc(r.account) : "") : "no rule matched"}</div></td></tr>`; }).join("")}
+      </tbody></table></div></details>`;
+  }
+  html += `<h3 class="subhead" style="margin-top:22px">Sorting rules <span class="help">checked top to bottom – the first match wins</span></h3>
+    <div class="scroll"><table class="edit-table"><thead><tr><th>If the description contains</th><th>Money</th><th>Account ends in</th><th>Put it in</th><th></th></tr></thead><tbody>
+    ${state.importRules.map((r, i) => `<tr>
+      <td><input class="name" data-r="${i}" data-rf="match" value="${esc(r.match)}" placeholder="(anything)"></td>
+      <td><select data-r="${i}" data-rf="dir">${[["any", "In or out"], ["in", "Money in"], ["out", "Money out"]].map(([k, v]) => `<option value="${k}"${r.dir === k ? " selected" : ""}>${v}</option>`).join("")}</select></td>
+      <td><input data-r="${i}" data-rf="account" value="${esc(r.account || "")}" placeholder="any" style="width:70px"></td>
+      <td><select data-r="${i}" data-rf="lineId">${lineOptions(r.lineId, true)}</select></td>
+      <td style="white-space:nowrap"><button class="icon" data-move="${i}:-1" title="Move up">↑</button><button class="icon" data-move="${i}:1" title="Move down">↓</button>
+        <button class="icon danger" data-rdel="${i}" title="Delete rule">✕</button></td></tr>`).join("")}
+    </tbody></table></div>
+    <div style="margin-top:10px"><button id="add-rule">+ Add a rule</button></div>`;
+  p.innerHTML = html;
+
+  const file = $("file"), drop = $("drop");
+  const read = f => { if (!f) return; const fr = new FileReader(); fr.onload = () => startImport(f.name, String(fr.result)); fr.readAsText(f); };
+  if (file) file.onchange = () => read(file.files[0]);
+  if (drop) { drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); }; drop.ondragleave = () => drop.classList.remove("over");
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); read(e.dataTransfer.files[0]); }; }
+  if (pendingImport) {
+    $("imp-cancel").onclick = () => { pendingImport = null; render(); };
+    $("imp-apply").onclick = applyImport;
+    const osNum = (id, key) => $(id).onchange = e => { const v = parseMoney(e.target.value); if (Number.isNaN(v)) return alert("Please enter a number");
+      pendingImport[key] = v || 0; render(); };
+    osNum("os-start", "osStart"); osNum("os-end", "osEnd");
+    $("os-line").onchange = e => { pendingImport.osLine = e.target.value; render(); };
+    p.querySelectorAll("select[data-tx]").forEach(sel => sel.onchange = () => {
+      const t = pendingImport.txns.find(x => x.n === Number(sel.dataset.tx)); t.lineId = sel.value; t.manual = true; render(); });
+  }
+  const recat = () => { if (pendingImport) categorize(pendingImport); commit(); };
+  p.querySelectorAll("[data-rf]").forEach(el => el.onchange = () => { state.importRules[el.dataset.r][el.dataset.rf] = el.value.trim ? el.value.trim() : el.value; recat(); });
+  p.querySelectorAll("[data-move]").forEach(b => b.onclick = () => { const [i, d] = b.dataset.move.split(":").map(Number), j = i + d;
+    if (j < 0 || j >= state.importRules.length) return; const R = state.importRules; [R[i], R[j]] = [R[j], R[i]]; recat(); });
+  p.querySelectorAll("[data-rdel]").forEach(b => b.onclick = () => { state.importRules.splice(Number(b.dataset.rdel), 1); recat(); });
+  $("add-rule").onclick = () => { state.importRules.unshift({ id: newId(), match: "", dir: "any", account: "", lineId: "" }); recat(); };
+}
+
+function panelSettings(p, F) {
+  p.innerHTML = `<div class="settings">
+    <div class="box"><h3>This week</h3>
+      <label>Company name</label><input id="s-company" value="${esc(state.company)}">
+      <div style="height:10px"></div>
+      <label>Week ending (last actual)</label><input type="date" id="s-asof" value="${esc(state.asOf)}">
+      <div style="height:10px"></div>
+      <label>Starting cash, net of reserve</label><input id="s-cash" value="${fmtNum(state.startingCash)}">
+      <div style="height:10px"></div>
+      <label>Minimum cash cushion (warning line)</label><input id="s-min" value="${fmtNum(state.minCash)}">
+      <div style="height:10px"></div>
+      <label>Flag future outflows of at least</label><input id="s-flag" value="${fmtNum(state.flagMin != null ? state.flagMin : 10000)}">
+    </div>
+    <div class="box"><h3>Start next week</h3>
+      <p class="help">Do this once a week. It moves the forecast forward one week:</p>
+      <ol class="help" style="padding-left:18px">
+        <li>The week ending ${fmtDate(F.weeks[0])} becomes "last week", using its forecast for comparison.</li>
+        <li>Starting cash is set to that week's forecasted ending cash (${fmt(F.cols[0].end)}).</li>
+        <li>Then import that week's Northrim file in <b>Bank import</b> and click <b>Use as starting cash</b> in Last week vs. forecast.</li>
+      </ol>
+      <button id="s-roll" class="primary">Start week ending ${fmtDate(F.weeks[0])} →</button>
+    </div>
+    ${CLOUD ? `<div class="box" id="s-access"></div>` : `<div class="box"><h3>Saving your work</h3>
+      <p class="help">Your edits are kept in this browser automatically, but to keep them for good (or send them to someone), click
+      <b>Save a copy</b> at the top. It downloads a new version of this file with everything in it. Open that file next time.</p>
+      <p class="help">Tip: name the files by week, e.g. <code>radar-${addDays(state.asOf, 7)}.html</code>.</p>
+    </div>`}</div>`;
+  if (CLOUD) accessBox($("s-access"));
+  const num = (id, key) => $(id).addEventListener("change", e => { const v = parseMoney(e.target.value);
+    if (v === null || Number.isNaN(v)) { alert("Please enter a number"); return render(); } state[key] = v; commit(); });
+  num("s-cash", "startingCash"); num("s-min", "minCash"); num("s-flag", "flagMin");
+  $("s-company").addEventListener("change", e => { state.company = e.target.value; commit(); });
+  $("s-asof").addEventListener("change", e => { if (e.target.value) { state.asOf = e.target.value; commit(); } });
+  $("s-roll").onclick = () => {
+    const w = F.weeks[0];
+    if (!confirm(`Start the week ending ${fmtDate(w, { year: "numeric" })}? The current "last week" comparison will be replaced.`)) return;
+    const rows = {}; for (const l of state.lines) { const c = F.cells[l.id][w]; if (c.total) rows[l.id] = { forecast: c.total, actual: null }; }
+    if (CLOUD) extraOps.push({ t: "snapshot", asOf: state.asOf, startingCash: state.startingCash,
+      values: state.lines.flatMap(l => F.weeks.map(wk => ({ key: l.id, week: wk, amount: Math.round(F.cells[l.id][wk].total * 100) / 100 }))) });
+    state.lastWeek = { weekEnding: w, startCash: state.startingCash, rows, osStart: state.osChecks || 0 };
+    state.startingCash = Math.round(F.cols[0].end * 100) / 100; state.asOf = w;
+    const first = addDays(w, 7);
+    for (const l of state.lines) if (l.changes && l.changes.length) { l.rule = activeRule(l, first); l.changes = l.changes.filter(c => c.from > first); if (!l.changes.length) delete l.changes; }
+    for (const id of Object.keys(state.overrides)) { for (const k of Object.keys(state.overrides[id])) if (k <= w) delete state.overrides[id][k];
+      if (!Object.keys(state.overrides[id]).length) delete state.overrides[id]; }
+    activeTab = "lastweek"; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x.dataset.tab === "lastweek"));
+    commit();
+  };
+}
+
+/* ---------------- save & theme ---------------- */
+$("btn-save").onclick = () => {
+  state.updatedAt = new Date().toISOString();
+  const json = JSON.stringify(state).replace(/</g, "\\u003c");
+  const html = PRISTINE.replace(/(<script id="state" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + json + b)
+    .replace(/(<script id="config" type="application\/json">)[\s\S]*?(<\/script>)/, (_, a, b) => a + "{}" + b);
+  const blob = new Blob([html], { type: "text/html" }), a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `radar-${state.asOf}.html`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  if (CLOUD) return toast("Offline backup downloaded");
+  dirty = false; restoredFrom = null; render();
+  $("status").textContent = "Saved — open the downloaded file next time";
+};
+(function () {
+  const btn = $("btn-theme");
+  const apply = t => { if (t === "light") document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
+    btn.textContent = t === "light" ? "SCOPE" : "TABLE"; };
+  let t = "dark"; try { t = localStorage.getItem("radar-theme") || "dark"; } catch (e) {}
+  apply(t);
+  btn.onclick = () => { t = t === "light" ? "dark" : "light"; apply(t); try { localStorage.setItem("radar-theme", t); } catch (e) {} };
+})();
+/* ---------------- cloud mode (Supabase) ---------------- */
+// Active only when the page is built with a Supabase URL + publishable key (build.py --cloud).
+let sb = null, me = null, myRole = null, saveChain = Promise.resolve(), saving = 0, extraOps = [], refreshTimer = null, saveError = null;
+const SB_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js";
+const canEdit = () => !CLOUD || myRole === "editor" || myRole === "admin";
+
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("Couldn't load " + src)); document.head.appendChild(s); });
+}
+function gate(html) {
+  document.body.classList.toggle("gated", !!html);
+  $("gate").innerHTML = html || "";
+}
+async function cloudStart() {
+  gate(`<div class="card gatecard"><p class="help">Connecting…</p></div>`);
+  try { await loadScript(SB_JS); } catch (e) { return gate(`<div class="card gatecard"><p class="neg">${esc(e.message)}. Check your internet connection and reload.</p></div>`); }
+  sb = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
+    auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" },
+    global: { headers: { "x-radar-via": "radar" } } });
+  sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") location.reload(); });
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return signInScreen();
+  me = data.session.user;
+  const who = await sb.rpc("whoami");
+  if (who.error) return gate(`<div class="card gatecard"><p class="neg">${esc(who.error.message)}</p></div>`);
+  myRole = who.data && who.data.role;
+  if (!myRole) return gate(`<div class="card gatecard"><h2>No access yet</h2>
+      <p>You're signed in as <b>${esc(me.email)}</b>, but you haven't been given access to Radar.</p>
+      <p class="help">Ask a Radar admin to add <b>${esc(me.email)}</b>.</p><button id="g-out">Sign out</button></div>`), $("g-out").onclick = () => sb.auth.signOut();
+  document.body.classList.toggle("readonly", !canEdit());
+  await reloadFromServer(true);
+  sb.channel("radar-changes")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "change_log" }, p => {
+      if (p.new && p.new.user_id === me.id) return;              // our own change: already on screen
+      scheduleRefresh(p.new && p.new.user_email);
+    }).subscribe();
+}
+function signInScreen() {
+  gate(`<div class="card gatecard"><h2>Sign in</h2>
+    <p class="help">Enter your work email and we'll send you a sign-in link.</p>
+    <form id="g-form"><input id="g-email" type="email" required placeholder="you@adn.com" autocomplete="email">
+      <button class="primary">Email me a link</button></form><p id="g-msg" class="help"></p></div>`);
+  $("g-form").onsubmit = async e => {
+    e.preventDefault();
+    const email = $("g-email").value.trim(), btn = $("g-form").querySelector("button");
+    btn.disabled = true; $("g-msg").textContent = "Sending…";
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+    btn.disabled = false;
+    $("g-msg").innerHTML = error ? `<span class="neg">${esc(error.message)}</span>` : `Check <b>${esc(email)}</b> for a sign-in link. You can close this tab.`;
+  };
+}
+async function reloadFromServer(first) {
+  const { data, error } = await sb.rpc("radar_state");
+  if (error || !data) return gate(`<div class="card gatecard"><p class="neg">Couldn't load Radar: ${esc(error ? error.message : "no data yet. Has the forecast been loaded?")}</p></div>`);
+  state = data; normalize(); lastJSON = JSON.stringify(state);
+  if (first) undoStack = [];
+  gate(""); render();
+}
+function scheduleRefresh(who) {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    const busy = saving || pendingImport || dragData || document.querySelector("dialog[open]") || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    if (busy) return scheduleRefresh(who);
+    undoStack = [];                                                 // someone else changed things: old undo steps no longer apply
+    await reloadFromServer(false);
+    toast(`Updated by ${who || "someone else"}`);
+  }, 1200);
+}
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+function newId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); });
+}
+
+// Turn "before" and "after" app states into the list of database changes.
+function diffOps(a, b) {
+  const ops = [], late = [], J = JSON.stringify;
+  const S = ["company", "asOf", "startingCash", "minCash", "flagMin", "osChecks", "weeks"];
+  if (S.some(k => J(a[k]) !== J(b[k]))) ops.push(Object.assign({ t: "settings" }, ...S.map(k => ({ [k]: b[k] }))));
+  const aL = new Map(a.lines.map((l, i) => [l.id, [l, i]])), bL = new Map(b.lines.map((l, i) => [l.id, [l, i]]));
+  const sched = l => { const m = new Map([[null, l.rule]]); (l.changes || []).forEach(c => m.set(c.from, c.rule)); return m; };
+  for (const [id, [l, i]] of bL) {
+    const p = aL.get(id);
+    if (!p || p[0].name !== l.name || p[0].kind !== l.kind || (p[0].note || "") !== (l.note || "") || p[1] !== i)
+      ops.push({ t: "line", key: id, name: l.name, kind: l.kind, note: l.note || "", sort: i * 10 });
+    const sa = p ? sched(p[0]) : new Map(), sbm = sched(l);
+    for (const [from, rule] of sbm) if (!sa.has(from) || J(sa.get(from)) !== J(rule)) ops.push({ t: "schedule", key: id, from, rule });
+    for (const from of sa.keys()) if (!sbm.has(from)) ops.push({ t: "schedule_delete", key: id, from });
+  }
+  for (const id of aL.keys()) if (!bL.has(id)) late.push({ t: "line_archive", key: id });
+  const flat = s => { const m = new Map(); for (const [k, ws] of Object.entries(s.overrides || {})) for (const [w, v] of Object.entries(ws)) m.set(k + "|" + w, v); return m; };
+  const oa = flat(a), ob = flat(b);
+  for (const [kw, v] of ob) if (oa.get(kw) !== v) { const [key, week] = kw.split("|"); ops.push({ t: "override", key, week, amount: v }); }
+  for (const kw of oa.keys()) if (!ob.has(kw) && bL.has(kw.split("|")[0])) { const [key, week] = kw.split("|"); ops.push({ t: "override_delete", key, week }); }
+  const ia = new Map(a.oneTime.map(o => [o.id, o])), ib = new Map(b.oneTime.map(o => [o.id, o]));
+  for (const [id, o] of ib) if (J(ia.get(id)) !== J(o)) ops.push({ t: "one", id, key: o.lineId, date: o.date, description: o.description || "", amount: o.amount });
+  for (const id of ia.keys()) if (!ib.has(id)) ops.push({ t: "one_delete", id });
+  const ra = new Map(a.importRules.map((r, i) => [r.id, [r, i]])), rb = new Map(b.importRules.map((r, i) => [r.id, [r, i]]));
+  for (const [id, [r, i]] of rb) { const p = ra.get(id);
+    if (r.lineId && (!p || J(p[0]) !== J(r) || p[1] !== i))      // rules with no category yet are saved once one is chosen
+      ops.push({ t: "rule", id, priority: (i + 1) * 10, match: r.match || "", dir: r.dir || "any", account: r.account || "", line: r.lineId }); }
+  for (const id of ra.keys()) if (!rb.has(id)) ops.push({ t: "rule_delete", id });
+  const la = a.lastWeek || {}, lb = b.lastWeek;
+  if (lb) {
+    if (la.weekEnding !== lb.weekEnding || la.startCash !== lb.startCash || la.osStart !== lb.osStart || a.osChecks !== b.osChecks)
+      ops.push({ t: "week", week: lb.weekEnding, startCash: lb.startCash, osStart: lb.osStart || 0, osEnd: b.osChecks || 0 });
+    const same = la.weekEnding === lb.weekEnding, src = lb.imported && (!la.imported || la.imported.at !== lb.imported.at) ? "import" : "manual";
+    const keys = new Set([...Object.keys(lb.rows || {}), ...(same ? Object.keys(la.rows || {}) : [])]);
+    for (const k of keys) {
+      const av = same && la.rows[k] ? la.rows[k].actual : null, bv = lb.rows[k] ? lb.rows[k].actual : null;
+      if (bv != null && bv !== av) ops.push({ t: "actual", week: lb.weekEnding, key: k, amount: bv, source: src });
+      else if (bv == null && av != null) ops.push({ t: "actual_delete", week: lb.weekEnding, key: k });
+    }
+  }
+  return ops.concat(late);
+}
+function setStatus() {
+  if (!CLOUD) return;
+  const el = $("status");
+  el.textContent = saveError ? "Not saved — " + saveError : saving ? "Saving…" : !canEdit() ? "View only" : "All changes saved";
+  el.className = "status" + (saveError ? " dirty" : "");
+}
+function cloudSave(before, after) {
+  const ops = diffOps(before, after).concat(extraOps.splice(0));
+  if (!ops.length) return;
+  queueCloud(async () => { const r = await sb.rpc("save_radar", { p_ops: ops }); if (r.error) throw r.error; });
+}
+function queueCloud(fn) {
+  saving++; setStatus();
+  saveChain = saveChain.then(fn).then(() => { saveError = null; }, async e => {
+    saveError = e.message || String(e);
+    alert("Radar couldn't save your last change:\n\n" + saveError + "\n\nReloading the latest saved version.");
+    undoStack = []; await reloadFromServer(false);
+  }).finally(() => { saving--; setStatus(); });
+}
+async function sha256Hex(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+// Store the original CSV and every transaction with its category.
+function cloudImport(pi, weekEnding) {
+  queueCloud(async () => {
+    const sha = await sha256Hex(pi.text), path = `${weekEnding}/${sha.slice(0, 16)}-${pi.fileName.replace(/[^\w.-]+/g, "_")}`;
+    const up = await sb.storage.from("bank-files").upload(path, new Blob([pi.text], { type: "text/csv" }), { upsert: false });
+    if (up.error && !/exists|duplicate/i.test(up.error.message)) throw up.error;
+    const seen = {}, txns = [];
+    for (const t of pi.txns) {
+      const k = [t.acct, t.date, t.amount.toFixed(2), t.desc, t.ref, t.ref2, t.text, t.type, t.trc].join("|");
+      seen[k] = (seen[k] || 0) + 1;
+      txns.push({ fp: await sha256Hex(k + "#" + seen[k]), acct: t.acct, acctName: t.acctName, date: t.date, amount: t.amount,
+        desc: t.desc, ref: t.ref, ref2: t.ref2, text: t.text, type: t.type, trc: t.trc,
+        line: t.lineId || "", manual: !!t.manual, rule: t.ruleId || "" });
+    }
+    const dates = pi.txns.map(t => t.date).sort();
+    const r = await sb.rpc("import_bank_file", { p_file: { name: pi.fileName, path, sha256: sha, firstDate: dates[0],
+      lastDate: dates[dates.length - 1], weekEnding }, p_txns: txns });
+    if (r.error) throw r.error;
+    toast(`Bank file saved: ${r.data.newTransactions} new transactions${r.data.alreadyKnown ? `, ${r.data.alreadyKnown} already on file` : ""}`);
+  });
+}
+async function accessBox(box) {
+  box.innerHTML = `<h3>Access</h3><p class="help">Signed in as <b>${esc(me.email)}</b> (${esc(myRole)}). <button class="link" id="a-out">Sign out</button></p>
+    ${myRole === "admin" ? `<div id="a-list" class="help">Loading people…</div>
+      <form id="a-add" class="a-add"><input id="a-email" type="email" placeholder="email of someone who has signed in once" required>
+        <select id="a-role"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="admin">Admin</option></select>
+        <button>Add</button></form>` : ""}`;
+  $("a-out").onclick = () => sb.auth.signOut();
+  if (myRole !== "admin") return;
+  const list = async () => {
+    const { data, error } = await sb.from("members").select("email, role").order("email");
+    $("a-list").innerHTML = error ? `<span class="neg">${esc(error.message)}</span>` : data.map(m => `<div class="a-row"><span>${esc(m.email)}</span>
+      <span>${esc(m.role)}</span>${m.email === me.email ? "<span></span>" : `<button class="link danger" data-rm="${esc(m.email)}">remove</button>`}</div>`).join("");
+    box.querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => {
+      if (!confirm(`Remove ${b.dataset.rm}'s access to Radar?`)) return;
+      const r = await sb.rpc("remove_member", { p_email: b.dataset.rm }); if (r.error) alert(r.error.message); list(); });
+  };
+  $("a-add").onsubmit = async e => { e.preventDefault();
+    const r = await sb.rpc("set_member", { p_email: $("a-email").value, p_role: $("a-role").value });
+    if (r.error) alert(r.error.message); else $("a-email").value = ""; list(); };
+  list();
+}
+
+window.addEventListener("beforeunload", e => { if (dirty || saving) { e.preventDefault(); e.returnValue = ""; } });
+if (CLOUD) { $("btn-save").textContent = "Download backup"; $("btn-save").classList.remove("primary");
+  $("btn-save").title = "Download an offline copy of the current forecast"; cloudStart(); }
+else render();
+</script>
+</body>
+</html>

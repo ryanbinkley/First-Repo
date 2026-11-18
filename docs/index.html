@@ -198,6 +198,22 @@ body.readonly #btn-add, body.readonly #btn-undo, body.readonly .addcell, body.re
 .a-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .a-add input { flex: 1; min-width: 180px; }
 #published:empty { display: none; }
+:root { --machine: #6fc9ff; }
+:root[data-theme="light"] { --machine: #2c6e94; }
+.lg-plan, .lg-mach { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin: 0 5px 0 10px; }
+.lg-plan { background: var(--bar); } .lg-mach { background: var(--machine); }
+.cd-radar { margin-top: 6px; } .cd-radar .lg-mach { margin-left: 0; }
+#machine .sg { border-top: 1px solid var(--grid); padding: 10px 0; }
+#machine .sg-top { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+#machine .sg-fx { margin-left: auto; white-space: nowrap; font-family: var(--f-num); }
+#machine .sg-first { margin: 4px 0 0; }
+#machine .sg-why { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+#machine .sg-btns { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.chip-conf { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); }
+.chip-conf.c-high { border-color: var(--pos); color: var(--pos); }
+.chip-conf.c-check { border-color: var(--amber); color: var(--amber); }
+.sg-set summary { cursor: pointer; margin-top: 8px; }
+
 #acc-chart svg { width: 100%; height: auto; display: block; }
 #chart rect.hit, #acc-chart rect.hit { cursor: pointer; }
 .chart-detail:empty { display: none; }
@@ -277,9 +293,11 @@ code { font-family: var(--f-num); }
   <div id="gate"></div>
   <section class="kpis" id="kpis"></section>
   <section class="card chartcard">
-    <h2>Cash scan · ending cash by week <span class="hint" id="chart-hint"></span></h2>
+    <h2>Cash scan · ending cash by week <span class="hint" id="chart-hint"></span>
+      <button class="link" id="mf-toggle" hidden style="float:right"></button></h2>
     <div id="chart"></div>
   </section>
+  <section class="card" id="machine" hidden style="margin-bottom:16px"></section>
   <nav class="tabs" id="tabs">
     <button data-tab="forecast" class="active">13-week forecast</button>
     <button data-tab="horizon">Over the horizon</button>
@@ -349,7 +367,7 @@ function commit() {
     if (CLOUD) cloudSave(JSON.parse(lastJSON), JSON.parse(now));
     undoStack.push(lastJSON); if (undoStack.length > 40) undoStack.shift(); lastJSON = now;
   }
-  if (CLOUD) return render();
+  if (CLOUD) { scheduleMachine(); return render(); }
   dirty = true;
   try { localStorage.setItem(LS_KEY, JSON.stringify({ base: EMBEDDED.updatedAt, savedAt: new Date().toISOString(), state })); } catch (e) {}
   render();
@@ -476,7 +494,7 @@ function renderKpis(F) {
 }
 function renderChart(F) {
   const W = 1100, H = 240, padL = 56, padR = 12, padT = 14, padB = 30;
-  const vals = F.cols.map(c => c.end).concat([state.minCash, 0]);
+  const vals = F.cols.map(c => c.end).concat([state.minCash, 0], CLOUD && MF && showMachine ? MF.cols.map(c => c.end) : []);
   let max = Math.max(...vals), min = Math.min(...vals);
   const step = niceStep((max - min) / 4); max = Math.ceil(max / step) * step; min = Math.floor(min / step) * step;
   const y = v => padT + (H - padT - padB) * (1 - (v - min) / (max - min || 1));
@@ -485,8 +503,11 @@ function renderChart(F) {
   for (let v = min; v <= max + 1; v += step)
     s += `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${padL - 6}" y="${y(v) + 4}" text-anchor="end">${fmtK(v)}</text>`;
   const low = F.cols.reduce((m, c) => c.end < m.end ? c : m, F.cols[0]);
+  const M = CLOUD && MF && showMachine ? Object.fromEntries(MF.cols.map(c => [c.week, c])) : null;
   F.cols.forEach((c, i) => {
-    const x = padL + i * bw + bw * 0.18, w = bw * 0.64, y0 = y(0), y1 = y(c.end);
+    const x = padL + i * bw + bw * (M ? 0.12 : 0.18), w = bw * (M ? 0.38 : 0.64), y0 = y(0), y1 = y(c.end);
+    if (M && M[c.week]) { const ym = y(M[c.week].end);
+      s += `<rect x="${x + w + bw * 0.02}" y="${Math.min(y0, ym)}" width="${w}" height="${Math.max(1, Math.abs(ym - y0))}" rx="3" fill="var(--machine)" opacity=".85"></rect>`; }
     const color = c.end < state.minCash ? "var(--bar-low)" : "var(--bar)";
     s += `<rect x="${x}" y="${Math.min(y0, y1)}" width="${w}" height="${Math.max(1, Math.abs(y1 - y0))}" rx="3" fill="${color}"
       ${chartSel === c.week ? 'stroke="var(--text)" stroke-width="2"' : ""}></rect>
@@ -499,7 +520,9 @@ function renderChart(F) {
     <rect x="${padL + 2}" y="${y(state.minCash) - 17}" width="${(15 + fmtK(state.minCash).length) * 7.6 + 8}" height="14" fill="var(--surface)" opacity=".9"/>
     <text x="${padL + 6}" y="${y(state.minCash) - 6}" text-anchor="start" style="fill:var(--amber)">MINIMUM CUSHION ${fmtK(state.minCash)}</text>`;
   $("chart").innerHTML = s + "</svg>" + `<div id="chart-detail" class="chart-detail"></div>`;
-  $("chart-hint").textContent = "tap a bar for details";
+  $("chart-hint").innerHTML = CLOUD && MF && showMachine ? '<i class="lg-plan"></i>your forecast <i class="lg-mach"></i>Radar · tap a week for details' : "tap a bar for details";
+  const tg = $("mf-toggle"); if (tg) { tg.hidden = !(CLOUD && MF); tg.textContent = showMachine ? "Hide Radar's view" : "Show Radar's view";
+    tg.onclick = () => { showMachine = !showMachine; try { localStorage.setItem("radar-machine", showMachine ? "on" : "off"); } catch (e) {} renderChart(compute()); }; }
   $("chart").querySelectorAll("rect.hit").forEach(r => r.onclick = () => { chartSel = chartSel === r.dataset.week ? null : r.dataset.week; renderChart(compute()); });
   const c = F.cols.find(x => x.week === chartSel);
   if (c) {
@@ -511,6 +534,10 @@ function renderChart(F) {
     $("chart-detail").innerHTML = `<div class="cd-head"><b>Week ending ${fmtDate(c.week, { year: "numeric" })}</b>
         <span>Starts ${fmt(c.start)} · in <span class="pos">+${fmt(c.cin)}</span> · out <span class="neg">−${fmt(c.cout)}</span> · ends <b class="${c.end < state.minCash ? "neg" : ""}">${fmt(c.end)}</b></span>
         <button class="link" id="cd-close">Close</button></div>
+      ${M && M[c.week] ? (() => { const m = M[c.week], d = m.end - c.end, parts = MF.suggestions.filter(x => !x.dismissed && Math.round(x.vals[c.week] - x.base[c.week]))
+          .map(x => { const v = (x.kind === "in" ? 1 : -1) * (x.vals[c.week] - x.base[c.week]); return `<span>${esc(x.name)} ${cashFx(Math.round(v))}</span>`; });
+        return `<div class="cd-radar"><span class="lg-mach"></span><b>Radar:</b> ends ${fmt(m.end)} (${cashFx(Math.round(d))} vs yours)${parts.length ? ` · this week: ${parts.join(" ")}` : ""}
+          <span class="help"> · see “What Radar sees” below for the reasons</span></div>`; })() : ""}
       <div class="cd-items">${big.slice(0, 8).map(b => `<span>${esc(b.name)}${b.one ? " (one-time)" : ""} <b class="${b.kind === "in" ? "pos" : ""}">${b.kind === "in" ? "+" : "−"}${fmtK(b.amt)}</b></span>`).join("")}</div>`;
     $("cd-close").onclick = () => { chartSel = null; renderChart(compute()); };
   }
@@ -884,7 +911,7 @@ function undo() {
   if (!undoStack.length) return;
   const before = lastJSON;
   state = JSON.parse(undoStack.pop()); lastJSON = JSON.stringify(state); dirty = true;
-  if (CLOUD) { cloudSave(JSON.parse(before), JSON.parse(lastJSON)); return render(); }
+  if (CLOUD) { cloudSave(JSON.parse(before), JSON.parse(lastJSON)); scheduleMachine(); return render(); }
   try { localStorage.setItem(LS_KEY, JSON.stringify({ base: EMBEDDED.updatedAt, savedAt: new Date().toISOString(), state })); } catch (e) {}
   render();
 }
@@ -1223,6 +1250,7 @@ async function cloudStart() {
   document.body.classList.toggle("readonly", !canEdit());
   await reloadFromServer(true);
   $("btn-publish").hidden = !canEdit(); $("btn-publish").onclick = publishDialog;
+  loadBundle();
   document.querySelector('#tabs [data-tab="accuracy"]').hidden = false;
   loadLastPublished();
   sb.channel("radar-changes")
@@ -1258,7 +1286,7 @@ function scheduleRefresh(who) {
     const busy = saving || pendingImport || historyLoading || dragData || document.querySelector("dialog[open]") || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
     if (busy) return scheduleRefresh(who);
     undoStack = [];                                                 // someone else changed things: old undo steps no longer apply
-    await reloadFromServer(false); loadLastPublished();
+    await reloadFromServer(false); loadLastPublished(); if (bundleAsOf !== state.asOf) loadBundle(); else scheduleMachine();
     toast(`Updated by ${who || "someone else"}`);
   }, 1200);
 }
@@ -1388,6 +1416,286 @@ async function accessBox(box) {
 
 
 
+/* ===== ENGINE START ===== */
+// Radar's evidence engine: finds patterns in history, backtests them against the plan's own past
+// forecasts, and proposes per-line corrections with the facts behind them. Pure functions; no DOM.
+const ENGINE = (() => {
+  const WK = 6048e5, mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
+  const median = a => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+  const wk = (a, b) => Math.round((D(b) - D(a)) / WK);
+  const wom = w => Math.min(4, Math.floor((D(w).getUTCDate() - 1) / 7) + 1);   // week of month 1..4 (5th folds into 4)
+  const monthName = w => D(w).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+
+  function prep(bundle) {
+    const act = {}, weeks = new Set();
+    for (const [w, k, a] of bundle.actuals) { (act[k] = act[k] || {})[w] = Number(a); weeks.add(w); }
+    const snaps = bundle.snapshots.map(s => { const v = {}; for (const [w, k, a] of s.rows) (v[k] = v[k] || {})[w] = Number(a); return { asOf: s.asOf, v }; })
+      .sort((a, b) => a.asOf < b.asOf ? -1 : 1);
+    return { act, actWeeks: [...weeks].sort(), actSet: weeks, snaps, info: Object.fromEntries(bundle.lines.map(l => [l.key, l])) };
+  }
+  const A = (P, k, w) => (P.act[k] && P.act[k][w]) || 0;
+  const lastWeeks = (P, t, n) => { const ws = P.actWeeks.filter(w => w <= t); return ws.slice(-n); };
+
+  // The plan's past 1–4-week-ahead forecasts vs actuals for line k, weeks in (t - n weeks, t]
+  function track(P, k, t, n) {
+    const out = [], from = addDays(t, -7 * n);
+    for (const s of P.snaps) {
+      if (s.asOf >= t) break;
+      for (const [w, f] of Object.entries(s.v[k] || {})) {
+        const h = wk(s.asOf, w);
+        if (h >= 1 && h <= 4 && w <= t && w > from && P.actSet.has(w)) out.push({ w, f, a: A(P, k, w) });
+      }
+    }
+    return out;
+  }
+
+  // ---- methods: given data up to t and the plan's values for future weeks, return machine values ----
+  const METHODS = {
+    calibrate: { label: "calibrated to your track record", applies: c => c !== "unplanned",
+      fit(P, k, t) { const tr = track(P, k, t, 26).filter(p => p.f), sf = tr.reduce((s, p) => s + p.f, 0), sa = tr.reduce((s, p) => s + p.a, 0);
+        if (tr.length < 8 || sf <= 0) return null; const r = Math.max(0.5, Math.min(1.5, sa / sf)); return { r, n: tr.length, sf: sf / tr.length, sa: sa / tr.length }; },
+      apply: (fit, plan) => Object.fromEntries(Object.entries(plan).map(([w, v]) => [w, v * (fit.rNow != null ? fit.rNow : fit.r)])) },
+    level: { label: "recent weekly level", applies: c => c === "weekly" || c === "unplanned",
+      fit(P, k, t) { const ws = lastWeeks(P, t, 13); if (ws.length < 10) return null; const vals = ws.map(w => A(P, k, w));
+        return { L: mean(vals), n: ws.length, active: vals.filter(v => Math.abs(v) > 1).length }; },
+      apply: (fit, plan) => Object.fromEntries(Object.keys(plan).map(w => [w, fit.L])) },
+    rhythm: { label: "monthly rhythm", applies: c => c === "weekly",
+      fit(P, k, t) { const ws = lastWeeks(P, t, 26); if (ws.length < 20) return null; const b = { 1: [], 2: [], 3: [], 4: [] };
+        ws.forEach(w => b[wom(w)].push(A(P, k, w))); const prof = Object.fromEntries(Object.entries(b).map(([q, v]) => [q, mean(v)]));
+        return { prof, n: ws.length }; },
+      apply: (fit, plan) => Object.fromEntries(Object.keys(plan).map(w => [w, fit.prof[wom(w)]])) },
+  };
+  const classify = vals => { const nz = vals.filter(v => Math.abs(v) > 1).length; return nz === 0 ? "unplanned" : nz >= vals.length * 0.75 ? "weekly" : "periodic"; };
+
+  // Replay the past year: at each past forecast, would the method have beaten the plan (1–4 weeks ahead)?
+  function backtest(P, k, method, T) {
+    let eP = 0, eM = 0, n = 0;
+    for (const s of P.snaps) {
+      if (s.asOf <= addDays(T, -7 * 52) || s.asOf > addDays(T, -28)) continue;
+      const plan = {}; for (let h = 1; h <= 4; h++) { const w = addDays(s.asOf, 7 * h); if (P.actSet.has(w)) plan[w] = (s.v[k] && s.v[k][w]) || 0; }
+      if (!Object.keys(plan).length) continue;
+      const allPlan = Object.fromEntries(Array.from({ length: 13 }, (_, i) => { const w = addDays(s.asOf, 7 * (i + 1)); return [w, (s.v[k] && s.v[k][w]) || 0]; }));
+      const cls = classify(Object.values(allPlan)); if (!METHODS[method].applies(cls)) continue;
+      const fit = METHODS[method].fit(P, k, s.asOf); if (!fit) continue;
+      const m = METHODS[method].apply(fit, plan);
+      for (const w of Object.keys(plan)) { const a = A(P, k, w); eP += Math.abs(a - plan[w]); eM += Math.abs(a - m[w]); n++; }
+    }
+    return n ? { planMiss: eP / n, machineMiss: eM / n, n, gain: eP ? 1 - eM / eP : 0 } : null;
+  }
+
+  // When did this line's level change? (largest sustained shift in the last 2 years)
+  function shift(P, k, T, periodic) {
+    let ws = lastWeeks(P, T, 104), vals = ws.map(w => A(P, k, w));
+    if (periodic) { const big = median(vals.filter(v => v > 0)) * 0.4; const keep = vals.map((v, i) => [ws[i], v]).filter(([, v]) => v > big); ws = keep.map(x => x[0]); vals = keep.map(x => x[1]); }
+    if (vals.length < 16) return null;
+    let best = null;
+    for (let i = 6; i <= vals.length - 6; i++) {
+      const a = vals.slice(0, i), b = vals.slice(i), ma = mean(a), mb = mean(b);
+      const sd = Math.sqrt((a.reduce((s, x) => s + (x - ma) ** 2, 0) + b.reduce((s, x) => s + (x - mb) ** 2, 0)) / (vals.length - 2)) || 1;
+      const tstat = Math.abs(mb - ma) / (sd * Math.sqrt(1 / a.length + 1 / b.length));
+      if (!best || tstat > best.t) best = { t: tstat, at: ws[i], before: ma, after: mb };
+    }
+    return best && best.t > 3 && Math.abs(best.after / best.before - 1) > 0.08 ? best : null;
+  }
+
+  function run(F, bundle, opts) {
+    const P = prep(bundle), T = state.asOf, weeks = F.weeks, out = [];
+    const dismissed = new Set((opts && opts.dismissed) || []);
+    const lineKeys = new Set([...state.lines.map(l => l.id), ...Object.keys(P.act)]);
+    for (const k of lineKeys) {
+      const line = state.lines.find(l => l.id === k), info = P.info[k] || {};
+      const kind = line ? line.kind : info.kind, name = line ? line.name : info.name || k;
+      const category = info.category || "flow";
+      if (!kind || category !== "flow") continue;                       // decisions and transfers are left to people
+      const base = Object.fromEntries(weeks.map(w => [w, line ? F.cells[k][w].base : 0]));
+      const cls = classify(Object.values(base));
+      if (cls === "unplanned" && line && line.rule.freq !== "none") continue;
+      if (line && line.rule.freq === "none" && cls === "unplanned") continue;  // one-time-only lines (invoices, events)
+      let best = null;
+      for (const mk of Object.keys(METHODS)) {
+        if (!METHODS[mk].applies(cls)) continue;
+        const fit = METHODS[mk].fit(P, k, T); if (!fit) continue;
+        if (mk === "calibrate") {   // aim at the actual level, so an applied correction isn't suggested again
+          const nz = Object.values(base).filter(v => Math.abs(v) > 1), cur = mean(nz);
+          if (!cur) continue; fit.target = fit.sa; fit.current = cur; fit.rNow = Math.max(0.5, Math.min(1.5, fit.r * fit.sf / cur));
+        }
+        if (mk === "level" && cls === "unplanned" && fit.active < 7) continue;     // must be a regular flow, not a one-off
+        const bt = cls === "unplanned" ? backtestUnplanned(P, k, T) : backtest(P, k, mk, T); if (!bt || bt.n < 20) continue;
+        const vals = METHODS[mk].apply(fit, base);
+        const impact = weeks.reduce((s, w) => s + (vals[w] - base[w]), 0);
+        if (!best || bt.gain > best.bt.gain) best = { method: mk, fit, bt, vals, impact };
+      }
+      if (!best || best.bt.gain < 0.10 || Math.abs(best.impact) < 5000) {
+        const dep = departure(P, k, T, cls, base, weeks); if (!dep) continue;
+        best = dep;
+      }
+      const sh = shift(P, k, T, cls === "periodic");
+      const conf = best.method === "departure" ? "check" : best.bt.gain >= 0.25 && best.bt.n >= 30 ? "high" : best.bt.gain >= 0.15 ? "medium" : "low";
+      const id = `${k}:${best.method}`;
+      out.push({ id, key: k, name, kind, cls, method: best.method, label: best.method === "departure" ? "plan differs from recent actuals" : METHODS[best.method].label, fit: best.fit, backtest: best.bt,
+        shift: sh, confidence: conf, dismissed: dismissed.has(id), base, vals: Object.fromEntries(weeks.map(w => [w, Math.round(best.vals[w] / 100) * 100])),
+        impact: Math.round(best.impact), cashEffect: Math.round(kind === "in" ? best.impact : -best.impact),
+        planWeekly: mean(Object.values(base)), machineWeekly: mean(Object.values(best.vals)) });
+    }
+    out.sort((a, b) => Math.abs(b.cashEffect) - Math.abs(a.cashEffect));
+    const active = out.filter(s => !s.dismissed);
+    let cash = state.startingCash;
+    const cols = F.cols.map(c => { const d = active.reduce((s, x) => s + (x.kind === "in" ? 1 : -1) * (x.vals[c.week] - x.base[c.week]), 0);
+      const start = cash; cash = start + c.net + d; return { week: c.week, start, net: c.net + d, end: cash, delta: d }; });
+    return { suggestions: out, cols, facts: facts(P, T) };
+  }
+  // The current plan breaks sharply from recent reality on a steady weekly line (even if past plans were fine).
+  function departure(P, k, T, cls, base, weeks) {
+    if (cls !== "weekly") return null;
+    const ws = lastWeeks(P, T, 13); if (ws.length < 12) return null;
+    const vals = ws.map(w => A(P, k, w)), L = mean(vals), sd = Math.sqrt(mean(vals.map(v => (v - L) ** 2)));
+    const planAvg = mean(Object.values(base));
+    if (!L || sd / Math.abs(L) > 0.6 || Math.abs(planAvg - L) / Math.abs(L) < 0.15) return null;
+    const impact = weeks.reduce((s, w) => s + (L - base[w]), 0); if (Math.abs(impact) < 25000) return null;
+    const lvl = backtest(P, k, "level", T); if (!lvl || lvl.gain < 0) return null;   // only where the recent level has been a good guide
+    const ly = weeks.map(w => addDays(w, -364)).filter(w => P.actSet.has(w));
+    const past = P.snaps.filter(s => s.asOf > addDays(T, -364) && s.asOf <= T).map(s => ({ asOf: s.asOf, avg: mean(Object.values(s.v[k] || {})) }));
+    let since = null; for (let i = past.length - 1; i >= 0 && Math.abs(past[i].avg / planAvg - 1) < 0.05; i--) since = past[i].asOf;
+    const before = past.filter(x => !since || x.asOf < since).map(x => x.avg);
+    return { method: "departure", fit: { L, sd, n: ws.length, planAvg, lastYear: ly.length >= 8 ? mean(ly.map(w => A(P, k, w))) : null,
+        since, beforeMin: before.length ? Math.min(...before) : null, beforeMax: before.length ? Math.max(...before) : null, levelGain: lvl.gain },
+      bt: { gain: 0, n: 0 }, vals: Object.fromEntries(weeks.map(w => [w, L])), impact };
+  }
+  // for lines not in the plan: compare "plan = 0" with the recent level
+  function backtestUnplanned(P, k, T) {
+    let eP = 0, eM = 0, n = 0;
+    for (const s of P.snaps) {
+      if (s.asOf <= addDays(T, -7 * 52) || s.asOf > addDays(T, -28)) continue;
+      const fit = METHODS.level.fit(P, k, s.asOf); if (!fit || fit.active < 7) continue;
+      for (let h = 1; h <= 4; h++) { const w = addDays(s.asOf, 7 * h); if (!P.actSet.has(w)) continue; const a = A(P, k, w); eP += Math.abs(a); eM += Math.abs(a - fit.L); n++; }
+    }
+    return n ? { planMiss: eP / n, machineMiss: eM / n, n, gain: eP ? 1 - eM / eP : 0 } : null;
+  }
+  // big-picture facts for the "What Radar sees" card
+  function facts(P, T) {
+    const recv = w => ["circ", "other_in"].reduce((s, k) => s + A(P, k, w), 0);
+    const ws = lastWeeks(P, T, 52), prev = P.actWeeks.filter(w => w <= addDays(T, -364)).slice(-52);
+    const f = [];
+    if (ws.length >= 40 && prev.length >= 40) {
+      const now = mean(ws.map(recv)), then = mean(prev.map(recv)), ch = now / then - 1;
+      f.push({ text: `Customer receipts averaged ${fmtK(now)}/week over the last year, ${Math.abs(ch * 100).toFixed(0)}% ${ch >= 0 ? "above" : "below"} the year before (${fmtK(then)}).` });
+    }
+    return f;
+  }
+  // plain-language rationale built only from computed numbers
+  function explain(s) {
+    const per = s.cls === "periodic" ? "payment" : "week", p = [];
+    if (s.method === "calibrate") p.push(`Over the last ${s.fit.n} forecasts made 1–4 weeks ahead, actual ${s.name.toLowerCase()} averaged ${fmt(s.fit.sa)} per ${per} vs. ${fmt(s.fit.sf)} forecast (${Math.abs((s.fit.r - 1) * 100).toFixed(0)}% ${s.fit.r < 1 ? "lower" : "higher"}). Your current plan averages ${fmt(s.fit.current)} per ${per}; Radar keeps your timing and scales amounts by ${Math.round((s.fit.rNow - 1) * 100)}%.`);
+    if (s.method === "level") p.push(s.cls === "unplanned" ? `Not in your plan, but it averaged ${fmt(s.fit.L)}/week over the last 13 weeks (activity in ${s.fit.active} of them).`
+      : `Averaged ${fmt(s.fit.L)}/week over the last 13 weeks vs. ${fmt(s.planWeekly)}/week in your plan.`);
+    if (s.method === "rhythm") p.push(`Follows a monthly rhythm (last 6 months): about ${[1, 2, 3, 4].map(q => fmtK(s.fit.prof[q])).join(", ")} in weeks 1–4 of the month.`);
+    if (s.shift) p.push(`Its level changed around ${monthName(s.shift.at)}: from about ${fmtK(s.shift.before)} to ${fmtK(s.shift.after)} per ${per}.`);
+    if (s.method === "departure") {
+      const f = s.fit, dir = f.planAvg < f.L ? "below" : "above";
+      p.push(`Your plan assumes ${fmt(f.planAvg)}/week, ${Math.abs(Math.round((f.planAvg / f.L - 1) * 100))}% ${dir} the last 13 weeks' average of ${fmt(f.L)}/week.`);
+      if (f.lastYear != null) p.push(`The same weeks last year averaged ${fmt(f.lastYear)}/week.`);
+      if (f.since && f.beforeMin != null) p.push(`Your plans assumed ${fmtK(f.beforeMin)}–${fmtK(f.beforeMax)}/week for this line until the week of ${fmtDate(f.since)}, when it changed to about ${fmtK(f.planAvg)}.`);
+      p.push(`If there's a known reason (a lost customer, a timing change), keep your number; otherwise the recent level may be more realistic.`);
+      return p;
+    }
+    p.push(`Tested on the past year: using this would have cut the typical weekly miss on this line from ${fmt(s.backtest.planMiss)} to ${fmt(s.backtest.machineMiss)} (${Math.round(s.backtest.gain * 100)}% better, ${s.backtest.n} comparisons).`);
+    return p;
+  }
+  return { run, explain };
+})();
+/* ===== ENGINE END ===== */
+
+/* ---------------- machine forecast (cloud mode) ---------------- */
+let MF = null, bundle = null, bundleAsOf = null, feedback = [], mfTimer = null, showMachine = true, mfOpen = {};
+try { showMachine = localStorage.getItem("radar-machine") !== "off"; } catch (e) {}
+async function loadBundle(force) {
+  if (!sb || (!force && bundle && bundleAsOf === state.asOf)) return;
+  const r = await sb.rpc("history_bundle", { p_since: addDays(state.asOf, -7 * 156), p_snap_since: addDays(state.asOf, -7 * 60) });
+  if (r.error || !r.data) { console.warn("history_bundle", r.error); return; }
+  bundle = r.data; bundleAsOf = state.asOf; feedback = bundle.feedback || [];
+  runMachine();
+}
+function runMachine() {
+  if (bundle && bundleAsOf !== state.asOf) return loadBundle(true);     // a new week started: re-read history
+  if (!bundle || !bundle.actuals.length) { MF = null; return renderMachine(); }
+  try { MF = ENGINE.run(compute(), bundle, { dismissed: feedback.map(f => f.suggestion) }); }
+  catch (e) { console.error(e); MF = null; }
+  renderChart(compute()); renderMachine();
+}
+function scheduleMachine() { clearTimeout(mfTimer); mfTimer = setTimeout(runMachine, 300); }
+const confChip = c => `<span class="chip-conf c-${c}">${c === "check" ? "check this" : c + " confidence"}</span>`;
+const cashFx = v => `<b class="${v >= 0 ? "pos" : "neg"}">${v >= 0 ? "+" : "−"}${fmtK(Math.abs(v))}</b>`;
+function renderMachine() {
+  const el = $("machine"); if (!el) return;
+  if (!CLOUD || !MF) { el.hidden = true; return; }
+  el.hidden = false;
+  const act = MF.suggestions.filter(s => !s.dismissed), set = MF.suggestions.filter(s => s.dismissed);
+  const total = act.reduce((s, x) => s + x.cashEffect, 0), edit = canEdit();
+  const row = s => `<div class="sg">
+      <div class="sg-top"><b>${esc(s.name)}</b> <span class="help">${esc(s.label)}</span> ${confChip(s.confidence)}
+        <span class="sg-fx">${cashFx(s.cashEffect)} <span class="help">cash over 13 wks</span></span></div>
+      ${mfOpen[s.id] ? "" : `<div class="help sg-first">${esc(ENGINE.explain(s)[0])}</div>`}
+      ${mfOpen[s.id] ? `<ul class="sg-why">${ENGINE.explain(s).map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      <div class="sg-btns"><button class="link" data-why="${s.id}">${mfOpen[s.id] ? "Hide reasons" : "Why?"}</button>
+        ${edit && !s.dismissed ? `<button data-apply="${s.id}">Apply to my forecast</button><button class="link" data-dismiss="${s.id}">Not now</button>` : ""}
+        ${edit && s.dismissed ? `<button class="link" data-restore="${s.id}">Bring back</button>` : ""}</div></div>`;
+  el.innerHTML = `<h2>What Radar sees <span class="hint">patterns in your history, tested against your past forecasts</span>
+      <button class="link" id="mf-rescan" style="float:right">Re-scan</button></h2>
+    ${MF.facts.map(f => `<p class="help" style="margin:0 0 8px">${esc(f.text)}</p>`).join("")}
+    ${act.length ? `<p style="margin:0 0 10px">Radar suggests ${act.length} change${act.length > 1 ? "s" : ""}. Together they would change ending cash by ${cashFx(total)} over 13 weeks.</p>`
+      + act.map(row).join("") : `<p class="help">No changes suggested. Your plan is in line with what history supports.</p>`}
+    ${set.length ? `<details class="sg-set"><summary class="help">Set aside (${set.length})</summary>${set.map(s => { const f = feedback.find(x => x.suggestion === s.id);
+      return row(s) + (f ? `<div class="help" style="margin:-6px 0 10px">Set aside by ${esc(f.by)} until ${fmtDate(f.until)}${f.reason ? `: “${esc(f.reason)}”` : ""}</div>` : ""); }).join("")}</details>` : ""}`;
+  $("mf-rescan").onclick = () => loadBundle(true);
+  el.querySelectorAll("[data-why]").forEach(b => b.onclick = () => { mfOpen[b.dataset.why] = !mfOpen[b.dataset.why]; renderMachine(); });
+  el.querySelectorAll("[data-apply]").forEach(b => b.onclick = () => applySuggestion(MF.suggestions.find(s => s.id === b.dataset.apply)));
+  el.querySelectorAll("[data-dismiss]").forEach(b => b.onclick = () => dismissSuggestion(MF.suggestions.find(s => s.id === b.dataset.dismiss)));
+  el.querySelectorAll("[data-restore]").forEach(b => b.onclick = async () => {
+    const f = feedback.filter(x => x.suggestion === b.dataset.restore);
+    for (const x of f) { const r = await sb.from("suggestion_feedback").delete().eq("id", x.id); if (r.error) return alert(r.error.message); }
+    feedback = feedback.filter(x => x.suggestion !== b.dataset.restore); runMachine(); });
+}
+async function applySuggestion(s) {
+  const weeks = weekEndings(), first = weeks[0];
+  let line = state.lines.find(l => l.id === s.key);
+  const r = line ? activeRule(line, first) : null, round = v => Math.round(v / 100) * 100;
+  let what;
+  if (s.method === "calibrate") what = `scale ${s.name.toLowerCase()} by ${Math.round((s.fit.rNow - 1) * 100)}% from the week ending ${fmtDate(first)} on (usual amount ${fmt(r.amount)} → ${fmt(round(r.amount * s.fit.rNow))}; your timing stays the same)`;
+  else if (s.method === "rhythm") what = `set ${s.name.toLowerCase()} for each of the next 13 weeks to its monthly rhythm (about ${[1, 2, 3, 4].map(q => fmtK(s.fit.prof[q])).join(", ")} in weeks 1–4)`;
+  else what = `${line ? "change" : "add"} ${s.name.toLowerCase()} to ${fmt(round(s.fit.L))} per week from the week ending ${fmtDate(first)} on`;
+  const { value } = await modal({ title: "Apply Radar's suggestion", body: `<p>This will ${esc(what)}.</p><p class="help">It's a normal change: logged, and Undo reverses it.</p>`,
+    buttons: [{ label: "Cancel", value: null, skipCheck: true }, { label: "Apply", value: "ok", cls: "primary" }] });
+  if (value !== "ok") return;
+  if (!line) {   // a flow that isn't in the plan yet (history-only line): bring it into the forecast
+    line = { id: s.key, name: s.name, kind: s.kind, rule: { freq: "weekly", amount: round(s.fit.L) }, note: "Added from Radar's suggestion" };
+    state.lines.push(line);
+  } else if (s.method === "calibrate") {
+    addChange(line, first, Object.assign({}, r, { amount: round(r.amount * s.fit.rNow) }));
+    const ov = state.overrides[line.id] || {};
+    for (const w of Object.keys(ov)) if (w >= first) ov[w] = round(ov[w] * s.fit.rNow);
+  } else if (s.method === "rhythm") {
+    addChange(line, first, Object.assign({}, r, { freq: "weekly", amount: round(Object.values(s.vals).reduce((a, b) => a + b, 0) / weeks.length) }));
+    const ov = state.overrides[line.id] = state.overrides[line.id] || {};
+    for (const w of weeks) ov[w] = round(s.vals[w]);
+  } else {
+    addChange(line, first, Object.assign({}, r, { freq: "weekly", amount: round(s.fit.L) }));
+    const ov = state.overrides[line.id]; if (ov) for (const w of Object.keys(ov)) if (w >= first) delete ov[w];
+  }
+  if (state.overrides[line.id] && !Object.keys(state.overrides[line.id]).length) delete state.overrides[line.id];
+  commit(); toast(`Applied: ${s.name}`);
+}
+async function dismissSuggestion(s) {
+  const { value, d } = await modal({ title: "Not now", body: `<p>Hide Radar's ${esc(s.name.toLowerCase())} suggestion for 4 weeks.</p>
+      <label>Why? (optional, helps Radar learn)</label><input name="reason" placeholder="e.g. a large customer left in September">`,
+    buttons: [{ label: "Cancel", value: null, skipCheck: true }, { label: "Set aside", value: "ok", cls: "primary" }] });
+  if (value !== "ok") return;
+  const row = { suggestion_id: s.id, reason: fv(d, "reason").trim(), until: addDays(state.asOf, 28) };
+  const r = await sb.from("suggestion_feedback").insert(row).select("id, suggestion_id, reason, until, created_by_email").single();
+  if (r.error) return alert(r.error.message);
+  feedback.push({ id: r.data.id, suggestion: r.data.suggestion_id, reason: r.data.reason, until: r.data.until, by: r.data.created_by_email });
+  runMachine();
+}
+
 /* ---------------- forecast accuracy (cloud mode) ---------------- */
 let accWindow = 52, accCache = {};
 const ACC_WINDOWS = [[26, "Last 6 months"], [52, "Last year"], [104, "Last 2 years"], [9999, "All history"]];
@@ -1500,6 +1808,7 @@ function previewHistory(text, name) {
     hp(`<span class="pos">Done.</span> Added ${tot.weeks || 0} weeks of actuals, ${tot.snapshots || 0} forecast snapshots
       (${(tot.snapshotValues || 0).toLocaleString()} values), ${tot.totals || 0} weeks of totals${tot.weeks || tot.snapshots ? "" : " (already loaded, nothing new)"}.`);
     if ($("h-go")) { $("h-go").disabled = false; $("h-go").textContent = "Load again"; } toast("History loaded");
+    accCache = {}; loadBundle(true);
   };
 }
 /* ---------------- publish update (cloud mode) ---------------- */

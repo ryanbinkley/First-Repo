@@ -1186,6 +1186,9 @@ function panelSettings(p, F) {
     const rows = {}; for (const l of state.lines) { const c = F.cells[l.id][w]; if (c.total) rows[l.id] = { forecast: c.total, actual: null }; }
     if (CLOUD) extraOps.push({ t: "snapshot", asOf: state.asOf, startingCash: state.startingCash,
       values: state.lines.flatMap(l => F.weeks.map(wk => ({ key: l.id, week: wk, amount: Math.round(F.cells[l.id][wk].total * 100) / 100 }))) });
+    if (CLOUD && MF) { const mv = machineValues();
+      extraOps.push({ t: "snapshot", kind: "machine", reason: "Radar's forecast at roll-forward", asOf: state.asOf, startingCash: state.startingCash,
+        values: Object.entries(mv).flatMap(([k, ws]) => Object.entries(ws).map(([wk, a]) => ({ key: k, week: wk, amount: Math.round(a * 100) / 100 }))) }); }
     state.lastWeek = { weekEnding: w, startCash: state.startingCash, rows, osStart: state.osChecks || 0 };
     state.startingCash = Math.round(F.cols[0].end * 100) / 100; state.asOf = w;
     const first = addDays(w, 7);
@@ -1620,9 +1623,30 @@ function runMachine() {
   if (!bundle || !bundle.actuals.length) { MF = null; return renderMachine(); }
   try { MF = ENGINE.run(compute(), bundle, { dismissed: feedback.map(f => f.suggestion) }); }
   catch (e) { console.error(e); MF = null; }
-  renderChart(compute()); renderMachine();
+  renderChart(compute()); renderMachine(); saveMachineRun();
 }
 function scheduleMachine() { clearTimeout(mfTimer); mfTimer = setTimeout(runMachine, 300); }
+const ENGINE_VERSION = "1";
+let lastRunHash = null, runSaveTimer = null;
+function machineValues() {   // Radar's forecast per line and week (plan + active suggestions)
+  const F = compute(), vals = {};
+  for (const l of state.lines) for (const w of F.weeks) (vals[l.id] = vals[l.id] || {})[w] = F.cells[l.id][w].total;
+  for (const s of MF.suggestions) if (!s.dismissed) for (const w of F.weeks) { vals[s.key] = vals[s.key] || {}; vals[s.key][w] = (vals[s.key][w] || 0) + (s.vals[w] - s.base[w]); }
+  return vals;
+}
+function saveMachineRun() {
+  if (!CLOUD || !MF || !canEdit()) return;
+  const F = compute(), run = {
+    as_of: state.asOf, engine_version: ENGINE_VERSION, facts: MF.facts,
+    cols: MF.cols.map((c, i) => ({ week: c.week, plan: Math.round(F.cols[i].end), radar: Math.round(c.end) })),
+    suggestions: MF.suggestions.map(s => ({ id: s.id, line: s.key, name: s.name, method: s.method, label: s.label, confidence: s.confidence,
+      cashEffect: s.cashEffect, dismissed: s.dismissed, reasons: ENGINE.explain(s),
+      weekly: Object.fromEntries(F.weeks.map(w => [w, Math.round(s.vals[w] - s.base[w])])) })) };
+  const h = JSON.stringify([run.as_of, run.cols, run.suggestions.map(x => [x.id, x.cashEffect, x.dismissed])]);
+  if (h === lastRunHash) return;
+  clearTimeout(runSaveTimer);
+  runSaveTimer = setTimeout(async () => { const r = await sb.from("machine_runs").insert(run); if (!r.error) lastRunHash = h; else console.warn(r.error); }, 3000);
+}
 const confChip = c => `<span class="chip-conf c-${c}">${c === "check" ? "check this" : c + " confidence"}</span>`;
 const cashFx = v => `<b class="${v >= 0 ? "pos" : "neg"}">${v >= 0 ? "+" : "−"}${fmtK(Math.abs(v))}</b>`;
 function renderMachine() {
@@ -1683,6 +1707,7 @@ async function applySuggestion(s) {
   }
   if (state.overrides[line.id] && !Object.keys(state.overrides[line.id]).length) delete state.overrides[line.id];
   commit(); toast(`Applied: ${s.name}`);
+  sb.from("suggestion_feedback").insert({ suggestion_id: s.id, action: "applied", until: state.asOf }).then(r => r.error && console.warn(r.error));
 }
 async function dismissSuggestion(s) {
   const { value, d } = await modal({ title: "Not now", body: `<p>Hide Radar's ${esc(s.name.toLowerCase())} suggestion for 4 weeks.</p>
@@ -1755,6 +1780,8 @@ async function panelAccuracy(p) {
       ${R.lines.map(l => `<tr><td class="txt">${esc(l.name)}${tag(l)}</td><td>${fmt(l.avg_f)}</td><td>${fmt(l.avg_a)}</td>
         <td class="${(l.kind === "in" ? l.bias >= 0 : l.bias <= 0) ? "pos" : "neg"}">${l.bias > 0 ? "+" : ""}${fmt(l.bias)}</td><td class="txt">${verdict(l)}</td></tr>`).join("")}
     </tbody></table></div>
+    <h3 class="subhead" style="margin-top:16px">Your forecast vs. Radar <span class="help">ending cash, compared on the same weeks</span></h3>
+    <div id="acc-score"><p class="help">Loading…</p></div>
     ${R.years.length > 1 ? `<h3 class="subhead" style="margin-top:16px">By year <span class="help">ending cash, 4 weeks ahead</span></h3>
     <div class="scroll"><table class="mini"><thead><tr><th class="txt">Year</th><th>Average lean</th><th>Typical miss</th><th>Forecasts</th></tr></thead><tbody>
       ${R.years.map(y => `<tr><td class="txt">${y.year}</td><td class="${y.bias_end >= 0 ? "pos" : "neg"}">${sg(y.bias_end)}</td><td>±${fmtK(y.miss_end)}</td><td>${y.n}</td></tr>`).join("")}
@@ -1768,6 +1795,18 @@ async function panelAccuracy(p) {
     $("acc-chart").querySelectorAll("rect:not(.hit)").forEach((b, i) => { if (i < hs.length) b.setAttribute("stroke-width", hs[i].h === accSel ? "2" : "0"); b.setAttribute("stroke", "var(--text)"); });
     showAcc(); });
   showAcc();
+  sb.rpc("scoreboard", { p_since: since }).then(({ data: S, error }) => {
+    const el = $("acc-score"); if (!el) return;
+    if (error) return el.innerHTML = `<p class="neg">${esc(error.message)}</p>`;
+    const rows = (S.horizon || []).filter(x => [1, 2, 4, 8, 13].includes(x.h));
+    const acts = `${S.applied} suggestion${S.applied === 1 ? "" : "s"} applied, ${S.dismissed} set aside in this period.`;
+    if (!rows.length) return el.innerHTML = `<p class="help">Radar's forecast is saved each time a new week starts${S.firstMachine ? ` (first saved for the week of ${fmtDate(S.firstMachine)})` : ""}.
+      The comparison appears once those weeks have actuals. ${acts}</p>`;
+    el.innerHTML = `<div class="scroll"><table class="mini"><thead><tr><th class="txt">Weeks ahead</th><th>Your typical miss</th><th>Radar's typical miss</th><th class="txt">Better</th><th>Weeks</th></tr></thead><tbody>
+      ${rows.map(x => `<tr><td class="txt">${x.h}</td><td>±${fmt(x.plan)}</td><td>±${fmt(x.radar)}</td>
+        <td class="txt">${Math.abs(x.plan - x.radar) < 1000 ? "about even" : x.radar < x.plan ? '<span class="pos">Radar</span>' : '<span class="pos">yours</span>'}</td><td>${x.n}</td></tr>`).join("")}
+    </tbody></table></div><p class="help">${acts} Your forecast already includes any suggestions you applied.</p>`;
+  });
 }
 let accSel = null;
 /* ---------------- load history (admins, cloud mode) ---------------- */

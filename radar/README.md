@@ -30,8 +30,9 @@ Real data files are **not** stored in this repository (see `.gitignore`).
 ## Roadmap
 
 1. ✅ Dashboard + editable assumptions
-2. Import bank transactions (Northrim export file or API) and auto-categorize into actuals
-3. Scheduled refresh and hosting for the team
+2. ✅ Import the weekly Northrim CSV and auto-categorize into actuals
+3. Direct bank connection (replaces the CSV download)
+4. Scheduled refresh and hosting for the team
 
 ## Look & feel
 
@@ -41,3 +42,13 @@ Two views, toggled with the button in the top-right:
 
 Fonts (Press Start 2P, VT323, IBM Plex) load from Google Fonts; offline it falls back to system fonts.
 The sweep animation stops when the viewer's system asks for reduced motion.
+
+## Weekly bank import
+
+1. **Settings & new week → Start next week** (rolls the forecast forward).
+2. Download the Northrim *Account Activity* CSV for that week, all accounts in one file.
+3. **Bank import** tab → drop the file in. Each transaction is sorted by the *sorting rules*
+   (first match wins; internal ZBA sweeps are ignored).
+4. Enter end-of-week **outstanding checks** from the Cash Report. The bank file only shows what
+   cleared, so the change in outstanding checks is added to the AP line to keep cash "net of O/S checks".
+5. Review, fix any category, click **Use these as last week's actuals**, then **Use as starting cash**.

@@ -374,6 +374,59 @@
     "forecast": 20000,
     "actual": 24500
    }
+  },
+  "osStart": 40000
+ },
+ "importRules": [
+  {
+   "id": "r1",
+   "match": "ZBA",
+   "dir": "any",
+   "account": "",
+   "lineId": "ignore"
+  },
+  {
+   "id": "r2",
+   "match": "USPS",
+   "dir": "out",
+   "account": "",
+   "lineId": "postage"
+  },
+  {
+   "id": "r3",
+   "match": "PAYROLL",
+   "dir": "out",
+   "account": "",
+   "lineId": "payroll"
+  },
+  {
+   "id": "r4",
+   "match": "401K",
+   "dir": "out",
+   "account": "",
+   "lineId": "k401"
+  },
+  {
+   "id": "r5",
+   "match": "MERCH",
+   "dir": "in",
+   "account": "",
+   "lineId": "other_in"
+  },
+  {
+   "id": "r6",
+   "match": "",
+   "dir": "in",
+   "account": "",
+   "lineId": "circ"
+  },
+  {
+   "id": "r7",
+   "match": "",
+   "dir": "out",
+   "account": "",
+   "lineId": "ap"
   }
- }
+ ],
+ "osChecks": 50000
 }

@@ -153,6 +153,21 @@ tr.past td { opacity: .5; }
 .settings .box { border: 1px solid var(--border); border-radius: 4px; padding: 14px; }
 .settings .box h3 { font-family: var(--f-8bit); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 34px 16px;
+  border: 1px dashed var(--accent); border-radius: 4px; cursor: pointer; background: var(--surface-2); text-align: center; }
+.dropzone.over, .dropzone:hover { background: var(--accent-soft); }
+.dz-title { font-family: var(--f-8bit); font-size: 10px; letter-spacing: .1em; color: var(--accent); text-transform: uppercase; }
+.subhead { font-family: var(--f-8bit); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+.subhead .help { font-family: var(--f-body); text-transform: none; letter-spacing: 0; font-size: 12px; margin-left: 8px; }
+table.mini td, table.mini th { padding: 6px 10px; font-family: var(--f-num); font-size: 13px; }
+table.mini td.txt { font-family: var(--f-body); }
+table.mini tr.total td { border-top: 1px solid var(--border); }
+table.tx td { vertical-align: top; }
+.txlist summary { cursor: pointer; margin-bottom: 10px; }
+table.tx td.desc { white-space: normal; min-width: 260px; }
+table.tx select { font: inherit; font-family: var(--f-body); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px; padding: 4px 6px; max-width: 260px; }
+table.tx tr.ignored td { opacity: .45; }
+table.tx tr.unassigned td { background: var(--warn-soft); }
 code { font-family: var(--f-num); }
 @media (max-width: 900px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -211,12 +226,13 @@ code { font-family: var(--f-num); }
     <button data-tab="recurring">Recurring items</button>
     <button data-tab="onetime">One-time items</button>
     <button data-tab="lastweek">Last week vs. forecast</button>
+    <button data-tab="import">Bank import</button>
     <button data-tab="settings">Settings &amp; new week</button>
   </nav>
   <section class="panel" id="panel"></section>
 </div>
 
-<script id="state" type="application/json">{"company":"Sample Company","asOf":"2026-11-13","startingCash":432000,"minCash":100000,"weeks":13,"updatedAt":"2026-01-01T00:00:00Z","lines":[{"id":"circ","name":"Subscription receipts","kind":"in","rule":{"freq":"weekly","amount":59500},"note":""},{"id":"other_in","name":"All other deposits","kind":"in","rule":{"freq":"weekly","amount":45500},"note":""},{"id":"events_in","name":"Events receipts","kind":"in","rule":{"freq":"weekly","amount":4500},"note":""},{"id":"postage","name":"Postage","kind":"out","rule":{"freq":"weekly","amount":1500},"note":""},{"id":"payroll","name":"Payroll","kind":"out","rule":{"freq":"biweekly","amount":113500,"anchor":"2026-11-20"},"note":""},{"id":"owners","name":"Cash to owners","kind":"out","rule":{"freq":"monthly","amount":34000,"day":10,"months":[]},"note":""},{"id":"carriers","name":"Carriers","kind":"out","rule":{"freq":"biweekly","amount":8000,"anchor":"2026-11-20"},"note":""},{"id":"k401","name":"401(k) contributions","kind":"out","rule":{"freq":"biweekly","amount":8500,"anchor":"2026-11-27"},"note":""},{"id":"wcomp","name":"Workers comp insurance","kind":"out","rule":{"freq":"monthly","amount":1500,"day":"last","months":[]},"note":""},{"id":"rent_c","name":"Rent \u2013 main office","kind":"out","rule":{"freq":"monthly","amount":12000,"day":"last","months":[]},"note":""},{"id":"rent_other","name":"Other rents","kind":"out","rule":{"freq":"monthly","amount":6500,"day":"last","months":[]},"note":""},{"id":"wick","name":"Printing partner invoice","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"events_out","name":"Event costs","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"subs","name":"Software subscriptions","kind":"out","rule":{"freq":"monthly","amount":3500,"day":1,"months":[]},"note":""},{"id":"prop_tax","name":"Property taxes","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"insurance","name":"Insurance","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"est_tax","name":"Quarterly tax payments","kind":"out","rule":{"freq":"monthly","amount":114000,"day":15,"months":[1,9]},"note":""},{"id":"cc","name":"Credit card payments","kind":"out","rule":{"freq":"weekly","amount":5500},"note":""},{"id":"ap","name":"AP run \u2013 balance","kind":"out","rule":{"freq":"weekly","amount":21000},"note":""}],"overrides":{"events_in":{"2026-11-20":5500,"2026-11-27":5500,"2027-01-08":2500,"2027-01-15":2500,"2027-01-22":2500,"2027-01-29":2500,"2027-02-05":2500,"2027-02-12":0},"payroll":{"2026-11-20":115000,"2026-12-04":111500,"2026-12-18":115000,"2027-01-01":111500,"2027-01-15":115000,"2027-01-29":99500,"2027-02-12":111500},"owners":{"2027-02-12":0},"est_tax":{"2027-01-08":114000,"2027-01-15":0},"cc":{"2026-11-27":11500},"ap":{"2026-11-27":31500,"2026-12-04":19000,"2026-12-11":20000,"2026-12-25":31500,"2027-01-01":19000,"2027-01-08":20000,"2027-01-22":31500,"2027-01-29":23000,"2027-02-05":19000,"2027-02-12":19000}},"oneTime":[{"id":"o1","date":"2026-11-20","lineId":"wick","description":"Printing invoice","amount":13000},{"id":"o2","date":"2026-12-25","lineId":"wick","description":"Printing invoice","amount":7000},{"id":"o3","date":"2027-01-29","lineId":"wick","description":"Printing invoice","amount":15000},{"id":"o4","date":"2026-11-20","lineId":"events_out","description":"Event costs","amount":21000},{"id":"o5","date":"2026-11-27","lineId":"events_out","description":"Event costs","amount":14000},{"id":"o6","date":"2026-12-25","lineId":"events_out","description":"Event costs","amount":11500},{"id":"o7","date":"2027-01-29","lineId":"events_out","description":"Event costs","amount":11500},{"id":"o8","date":"2026-12-25","lineId":"subs","description":"Annual software license","amount":60000},{"id":"o9","date":"2026-11-20","lineId":"prop_tax","description":"Property taxes","amount":6500},{"id":"o10","date":"2026-11-20","lineId":"insurance","description":"Insurance renewals","amount":34000}],"lastWeek":{"weekEnding":"2026-11-13","startCash":422500,"rows":{"circ":{"forecast":59500,"actual":59000},"other_in":{"forecast":45500,"actual":46500},"events_in":{"forecast":5500,"actual":0},"postage":{"forecast":1500,"actual":1500},"owners":{"forecast":34000,"actual":35000},"k401":{"forecast":8500,"actual":7500},"wick":{"forecast":13000,"actual":0},"insurance":{"forecast":13000,"actual":14000},"cc":{"forecast":12500,"actual":13000},"ap":{"forecast":20000,"actual":24500}}}}</script>
+<script id="state" type="application/json">{"company":"Sample Company","asOf":"2026-11-13","startingCash":432000,"minCash":100000,"weeks":13,"updatedAt":"2026-01-01T00:00:00Z","lines":[{"id":"circ","name":"Subscription receipts","kind":"in","rule":{"freq":"weekly","amount":59500},"note":""},{"id":"other_in","name":"All other deposits","kind":"in","rule":{"freq":"weekly","amount":45500},"note":""},{"id":"events_in","name":"Events receipts","kind":"in","rule":{"freq":"weekly","amount":4500},"note":""},{"id":"postage","name":"Postage","kind":"out","rule":{"freq":"weekly","amount":1500},"note":""},{"id":"payroll","name":"Payroll","kind":"out","rule":{"freq":"biweekly","amount":113500,"anchor":"2026-11-20"},"note":""},{"id":"owners","name":"Cash to owners","kind":"out","rule":{"freq":"monthly","amount":34000,"day":10,"months":[]},"note":""},{"id":"carriers","name":"Carriers","kind":"out","rule":{"freq":"biweekly","amount":8000,"anchor":"2026-11-20"},"note":""},{"id":"k401","name":"401(k) contributions","kind":"out","rule":{"freq":"biweekly","amount":8500,"anchor":"2026-11-27"},"note":""},{"id":"wcomp","name":"Workers comp insurance","kind":"out","rule":{"freq":"monthly","amount":1500,"day":"last","months":[]},"note":""},{"id":"rent_c","name":"Rent \u2013 main office","kind":"out","rule":{"freq":"monthly","amount":12000,"day":"last","months":[]},"note":""},{"id":"rent_other","name":"Other rents","kind":"out","rule":{"freq":"monthly","amount":6500,"day":"last","months":[]},"note":""},{"id":"wick","name":"Printing partner invoice","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"events_out","name":"Event costs","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"subs","name":"Software subscriptions","kind":"out","rule":{"freq":"monthly","amount":3500,"day":1,"months":[]},"note":""},{"id":"prop_tax","name":"Property taxes","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"insurance","name":"Insurance","kind":"out","rule":{"freq":"none","amount":0},"note":""},{"id":"est_tax","name":"Quarterly tax payments","kind":"out","rule":{"freq":"monthly","amount":114000,"day":15,"months":[1,9]},"note":""},{"id":"cc","name":"Credit card payments","kind":"out","rule":{"freq":"weekly","amount":5500},"note":""},{"id":"ap","name":"AP run \u2013 balance","kind":"out","rule":{"freq":"weekly","amount":21000},"note":""}],"overrides":{"events_in":{"2026-11-20":5500,"2026-11-27":5500,"2027-01-08":2500,"2027-01-15":2500,"2027-01-22":2500,"2027-01-29":2500,"2027-02-05":2500,"2027-02-12":0},"payroll":{"2026-11-20":115000,"2026-12-04":111500,"2026-12-18":115000,"2027-01-01":111500,"2027-01-15":115000,"2027-01-29":99500,"2027-02-12":111500},"owners":{"2027-02-12":0},"est_tax":{"2027-01-08":114000,"2027-01-15":0},"cc":{"2026-11-27":11500},"ap":{"2026-11-27":31500,"2026-12-04":19000,"2026-12-11":20000,"2026-12-25":31500,"2027-01-01":19000,"2027-01-08":20000,"2027-01-22":31500,"2027-01-29":23000,"2027-02-05":19000,"2027-02-12":19000}},"oneTime":[{"id":"o1","date":"2026-11-20","lineId":"wick","description":"Printing invoice","amount":13000},{"id":"o2","date":"2026-12-25","lineId":"wick","description":"Printing invoice","amount":7000},{"id":"o3","date":"2027-01-29","lineId":"wick","description":"Printing invoice","amount":15000},{"id":"o4","date":"2026-11-20","lineId":"events_out","description":"Event costs","amount":21000},{"id":"o5","date":"2026-11-27","lineId":"events_out","description":"Event costs","amount":14000},{"id":"o6","date":"2026-12-25","lineId":"events_out","description":"Event costs","amount":11500},{"id":"o7","date":"2027-01-29","lineId":"events_out","description":"Event costs","amount":11500},{"id":"o8","date":"2026-12-25","lineId":"subs","description":"Annual software license","amount":60000},{"id":"o9","date":"2026-11-20","lineId":"prop_tax","description":"Property taxes","amount":6500},{"id":"o10","date":"2026-11-20","lineId":"insurance","description":"Insurance renewals","amount":34000}],"lastWeek":{"weekEnding":"2026-11-13","startCash":422500,"rows":{"circ":{"forecast":59500,"actual":59000},"other_in":{"forecast":45500,"actual":46500},"events_in":{"forecast":5500,"actual":0},"postage":{"forecast":1500,"actual":1500},"owners":{"forecast":34000,"actual":35000},"k401":{"forecast":8500,"actual":7500},"wick":{"forecast":13000,"actual":0},"insurance":{"forecast":13000,"actual":14000},"cc":{"forecast":12500,"actual":13000},"ap":{"forecast":20000,"actual":24500}},"osStart":40000},"importRules":[{"id":"r1","match":"ZBA","dir":"any","account":"","lineId":"ignore"},{"id":"r2","match":"USPS","dir":"out","account":"","lineId":"postage"},{"id":"r3","match":"PAYROLL","dir":"out","account":"","lineId":"payroll"},{"id":"r4","match":"401K","dir":"out","account":"","lineId":"k401"},{"id":"r5","match":"MERCH","dir":"in","account":"","lineId":"other_in"},{"id":"r6","match":"","dir":"in","account":"","lineId":"circ"},{"id":"r7","match":"","dir":"out","account":"","lineId":"ap"}],"osChecks":50000}</script>
 <script>
 "use strict";
 // Snapshot of this file's original markup, used by "Save a copy" (must run before anything renders).
@@ -235,7 +251,7 @@ const fmtDate = (s, opts) => D(s).toLocaleDateString("en-US", Object.assign({ mo
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 /* ---------------- money ---------------- */
-const fmt = n => (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
+const fmt = n => (Math.round(n) < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
 const fmtNum = n => Math.round(n).toLocaleString("en-US");
 const fmtK = n => { const a = Math.abs(n), s = n < 0 ? "-$" : "$";
   return a >= 1e6 ? s + (a / 1e6).toFixed(2) + "M" : a >= 1e4 ? s + Math.round(a / 1e3) + "k" : s + Math.round(a).toLocaleString("en-US"); };
@@ -254,6 +270,12 @@ function normalize() {
   state.overrides = state.overrides || {}; state.oneTime = state.oneTime || [];
   state.lastWeek = state.lastWeek || { weekEnding: state.asOf, startCash: state.startingCash, rows: {} };
   state.weeks = state.weeks || 13;
+  if (!state.importRules) {
+    const firstIn = state.lines.find(l => l.kind === "in"), lastOut = state.lines.filter(l => l.kind === "out").slice(-1)[0];
+    state.importRules = [{ id: "r1", match: "ZBA", dir: "any", account: "", lineId: "ignore" },
+      { id: "r2", match: "", dir: "in", account: "", lineId: firstIn ? firstIn.id : "" },
+      { id: "r3", match: "", dir: "out", account: "", lineId: lastOut ? lastOut.id : "" }];
+  }
 }
 normalize();
 function commit() {
@@ -413,7 +435,7 @@ $("tabs").addEventListener("click", e => { const b = e.target.closest("button[da
   activeTab = b.dataset.tab; document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x === b)); render(); });
 function renderPanel(F) {
   const p = $("panel");
-  ({ forecast: panelForecast, recurring: panelRecurring, onetime: panelOneTime, lastweek: panelLastWeek, settings: panelSettings })[activeTab](p, F);
+  ({ forecast: panelForecast, recurring: panelRecurring, onetime: panelOneTime, lastweek: panelLastWeek, import: panelImport, settings: panelSettings })[activeTab](p, F);
 }
 
 function panelForecast(p, F) {
@@ -565,7 +587,8 @@ function panelLastWeek(p) {
     <td style="padding:6px 10px"><b>${fmt(a)}</b></td><td style="padding:6px 10px" class="${better >= 0 ? "pos" : "neg"}"><b>${better >= 0 ? "+" : ""}${fmt(better)}</b></td></tr>`;
   p.innerHTML = `
     <p class="help">Week ending <b>${fmtDate(lw.weekEnding, { year: "numeric" })}</b>. Variance is shown so that <span class="pos">green</span> is good for cash
-      (more came in, or less went out, than planned). Enter actuals from the Cash Report.</p>
+      (more came in, or less went out, than planned). Import the Northrim file in <b>Bank import</b>, or type actuals here.
+      ${lw.imported ? `<br>Imported from ${esc(lw.imported.fileName)} (${lw.imported.count} transactions).` : ""}</p>
     <div class="scroll edit-table"><table><thead><tr><th class="txt">Line item</th><th>Forecast</th><th>Actual</th><th>Variance</th></tr></thead><tbody>
       <tr><td class="txt" style="padding:6px 10px">Starting cash</td><td style="padding:6px 10px">${fmt(lw.startCash)}</td><td style="padding:6px 10px">${fmt(lw.startCash)}</td><td></td></tr>
       <tr class="section"><td colspan="4" class="txt" style="padding:6px 10px;color:var(--muted);font-size:12px">CASH IN</td></tr>
@@ -587,6 +610,192 @@ function panelLastWeek(p) {
   const use = $("lw-use"); if (use) use.onclick = () => { state.startingCash = Math.round(t.aEnd * 100) / 100; commit(); };
 }
 
+/* ---------------- bank import ---------------- */
+let pendingImport = null;
+function parseCSV(text) {
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ",") { row.push(f); f = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(f); f = "";
+      if (row.some(c => c.trim() !== "")) rows.push(row); row = []; }
+    else f += ch;
+  }
+  row.push(f); if (row.some(c => c.trim() !== "")) rows.push(row);
+  return rows;
+}
+const squash = s => String(s || "").toUpperCase().replace(/\s+/g, " ").trim();
+function readBankFile(text) {
+  const rows = parseCSV(text.replace(/^﻿/, ""));
+  if (rows.length < 2) throw new Error("The file has no transactions in it.");
+  const head = rows[0].map(h => h.trim().toLowerCase());
+  const col = (...names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i; } return -1; };
+  const c = { date: col("post date", "posting date", "date"), amount: col("amount"), desc: col("description"), ref: col("reference"),
+    text: col("text", "memo"), acct: col("account number", "account"), name: col("account name"), type: col("type") };
+  if (c.date < 0 || c.amount < 0) throw new Error("Couldn't find the \"Post Date\" and \"Amount\" columns. Is this the Northrim account activity CSV?");
+  const get = (r, i) => i >= 0 ? (r[i] || "").trim() : "";
+  return rows.slice(1).map((r, n) => {
+    const m = get(r, c.date).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/), amount = parseMoney(get(r, c.amount));
+    if (!m || amount == null || Number.isNaN(amount)) return null;
+    return { n, date: `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`, amount, acct: get(r, c.acct).slice(-4),
+      acctName: get(r, c.name), desc: get(r, c.desc), ref: get(r, c.ref), text: get(r, c.text), type: get(r, c.type) };
+  }).filter(Boolean);
+}
+function matchRule(t) {
+  const hay = squash([t.ref, t.desc, t.text, t.type].join(" "));
+  for (const r of state.importRules) {
+    if (r.dir === "in" && t.amount <= 0) continue;
+    if (r.dir === "out" && t.amount >= 0) continue;
+    if (r.account && !t.acct.endsWith(String(r.account).trim())) continue;
+    if (r.match && !hay.includes(squash(r.match))) continue;
+    return r;
+  }
+  return null;
+}
+function categorize(pi) {
+  for (const t of pi.txns) if (!t.manual) { const r = matchRule(t); t.ruleId = r ? r.id : null; t.lineId = r ? r.lineId : ""; }
+}
+function startImport(fileName, text) {
+  let txns;
+  try { txns = readBankFile(text); } catch (e) { alert(e.message); return; }
+  if (!txns.length) { alert("No transactions found in that file."); return; }
+  const lw = state.lastWeek, apLine = state.lines.find(l => l.id === "ap") || state.lines.filter(l => l.kind === "out").slice(-1)[0];
+  pendingImport = { fileName, txns, osStart: lw.osStart != null ? lw.osStart : 0, osEnd: state.osChecks != null ? state.osChecks : 0,
+    osLine: apLine ? apLine.id : "" };
+  categorize(pendingImport); render();
+}
+function importSummary(pi) {
+  const sums = {}, lineById = Object.fromEntries(state.lines.map(l => [l.id, l]));
+  let ignoredNet = 0, ignored = 0, unassigned = 0, bankNet = 0;
+  const lw = state.lastWeek, from = addDays(lw.weekEnding, -6);
+  const outside = pi.txns.filter(t => t.date < from || t.date > lw.weekEnding).length;
+  for (const t of pi.txns) {
+    bankNet += t.amount;
+    if (t.lineId === "ignore") { ignored++; ignoredNet += t.amount; continue; }
+    const l = lineById[t.lineId]; if (!l) { unassigned++; continue; }
+    sums[l.id] = (sums[l.id] || 0) + (l.kind === "in" ? t.amount : -t.amount);
+  }
+  const osChange = (Number(pi.osEnd) || 0) - (Number(pi.osStart) || 0), bankOnly = Object.assign({}, sums);
+  if (osChange && lineById[pi.osLine]) sums[pi.osLine] = (sums[pi.osLine] || 0) + (lineById[pi.osLine].kind === "out" ? osChange : -osChange);
+  let tin = 0, tout = 0; for (const [id, v] of Object.entries(sums)) lineById[id].kind === "in" ? tin += v : tout += v;
+  return { sums, bankOnly, ignored, ignoredNet, unassigned, outside, bankNet, osChange, tin, tout, end: lw.startCash + tin - tout };
+}
+function applyImport() {
+  const pi = pendingImport, s = importSummary(pi), lw = state.lastWeek;
+  if (s.unassigned && !confirm(`${s.unassigned} transaction(s) have no category and will be left out. Continue?`)) return;
+  for (const l of state.lines) {
+    if (s.sums[l.id] != null) { const r = lw.rows[l.id] = lw.rows[l.id] || { forecast: 0 }; r.actual = Math.round(s.sums[l.id] * 100) / 100; }
+    else if (lw.rows[l.id]) lw.rows[l.id].actual = 0;
+  }
+  lw.osStart = Number(pi.osStart) || 0; state.osChecks = Number(pi.osEnd) || 0;
+  lw.imported = { fileName: pi.fileName, count: pi.txns.length, at: new Date().toISOString() };
+  pendingImport = null; activeTab = "lastweek";
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("active", x.dataset.tab === "lastweek"));
+  commit();
+}
+function lineOptions(sel, withIgnore) {
+  return (withIgnore ? `<option value="ignore"${sel === "ignore" ? " selected" : ""}>Ignore – transfer between our accounts</option>` : "")
+    + `<option value=""${!sel ? " selected" : ""}>— needs a category —</option>`
+    + state.lines.map(l => `<option value="${l.id}"${l.id === sel ? " selected" : ""}>${esc(l.name)} (${l.kind})</option>`).join("");
+}
+function panelImport(p) {
+  const lw = state.lastWeek;
+  let html = "";
+  if (!pendingImport) {
+    html += `<p class="help">Download the account activity CSV from Northrim for the week ending <b>${fmtDate(lw.weekEnding, { year: "numeric" })}</b>
+      (all accounts in one file), then drop it here. You'll see every transaction and where it's going before anything changes.</p>
+      <label class="dropzone" id="drop"><input type="file" id="file" accept=".csv,text/csv" hidden>
+        <span class="dz-title">Drop the Northrim CSV here</span><span class="help" style="margin:0">or click to choose a file</span></label>
+      ${lw.imported ? `<p class="help" style="margin-top:10px">Last import: ${esc(lw.imported.fileName)} · ${lw.imported.count} transactions · ${esc(new Date(lw.imported.at).toLocaleString())}</p>` : ""}`;
+  } else {
+    const pi = pendingImport, s = importSummary(pi), lineById = Object.fromEntries(state.lines.map(l => [l.id, l]));
+    const dates = pi.txns.map(t => t.date).sort(), accts = [...new Set(pi.txns.map(t => (t.acctName ? t.acctName + " " : "") + "…" + t.acct))];
+    const warn = [];
+    if (s.outside) warn.push(`${s.outside} transaction(s) are dated outside the week ${fmtDate(addDays(lw.weekEnding, -6))}–${fmtDate(lw.weekEnding)}. Check you downloaded the right week, or start the new week first (Settings).`);
+    if (s.unassigned) warn.push(`${s.unassigned} transaction(s) need a category – pick one below, or add a rule.`);
+    if (Math.abs(s.ignoredNet) > 0.5) warn.push(`Transfers marked "ignore" don't net to zero (${fmt(s.ignoredNet)}). Some money may have moved to an account that isn't in this file.`);
+    const rowsIds = state.lines.filter(l => s.sums[l.id] != null || (lw.rows[l.id] && lw.rows[l.id].forecast));
+    const sumRow = l => { const f = lw.rows[l.id] ? Number(lw.rows[l.id].forecast || 0) : 0, b = s.bankOnly[l.id] || 0, a = s.sums[l.id] || 0;
+      return `<tr><td class="txt">${esc(l.name)}</td><td>${fmt(f)}</td><td>${fmt(b)}</td><td>${a !== b ? (a - b > 0 ? "+" : "") + fmt(a - b) : ""}</td><td><b>${fmt(a)}</b></td></tr>`; };
+    const txs = pi.txns.slice().sort((a, b) => a.acct < b.acct ? -1 : a.acct > b.acct ? 1 : a.date < b.date ? -1 : a.date > b.date ? 1 : a.n - b.n);
+    html += `
+      <div class="toolbar"><div><b>${esc(pi.fileName)}</b> · ${pi.txns.length} transactions · ${fmtDate(dates[0])}–${fmtDate(dates[dates.length - 1])}
+        <div class="help" style="margin:2px 0 0">${accts.map(esc).join(" · ")}</div></div>
+        <div class="actions"><button id="imp-cancel">Cancel</button><button id="imp-apply" class="primary">Use these as last week's actuals</button></div></div>
+      ${warn.map(w => `<div class="banner">${esc(w)}</div>`).join("")}
+      <div class="settings" style="margin-bottom:14px">
+        <div class="box"><h3>Outstanding checks</h3>
+          <p class="help">Checks written but not yet cleared the bank. The bank file only shows what cleared; this keeps the forecast on the same
+            "net of outstanding checks" basis as the Cash Report.</p>
+          <label>Start of week</label><input class="money" id="os-start" value="${fmtNum(pi.osStart || 0)}">
+          <div style="height:8px"></div>
+          <label>End of week (Cash Report: O/S Checks &amp; Wires)</label><input class="money" id="os-end" value="${fmtNum(pi.osEnd || 0)}">
+          <div style="height:8px"></div>
+          <label>Count the change as</label><select id="os-line" style="width:100%">${lineOptions(pi.osLine)}</select>
+        </div>
+        <div class="box"><h3>Check figures</h3>
+          <table class="mini"><tbody>
+            <tr><td class="txt">Starting cash</td><td>${fmt(lw.startCash)}</td></tr>
+            <tr><td class="txt">Net change per bank file</td><td>${fmt(s.bankNet - s.ignoredNet)}</td></tr>
+            <tr><td class="txt">Less increase in outstanding checks</td><td>${fmt(-s.osChange)}</td></tr>
+            <tr class="total"><td class="txt"><b>Actual ending cash</b></td><td><b>${fmt(s.end)}</b></td></tr>
+            <tr><td class="txt">Forecast had</td><td>${fmt(lastWeekTotals().fEnd)}</td></tr>
+            <tr><td class="txt">Transfers between accounts (ignored)</td><td>${s.ignored} · net ${fmt(s.ignoredNet)}</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+      <div class="scroll" style="margin-bottom:14px"><table class="mini"><thead><tr><th class="txt">Line item</th><th>Forecast</th><th>From bank file</th><th>O/S checks</th><th>Actual</th></tr></thead>
+        <tbody>${rowsIds.map(sumRow).join("")}
+        <tr class="total"><td class="txt"><b>Total cash in</b></td><td></td><td></td><td></td><td><b>${fmt(s.tin)}</b></td></tr>
+        <tr class="total"><td class="txt"><b>Total cash out</b></td><td></td><td></td><td></td><td><b>${fmt(s.tout)}</b></td></tr></tbody></table></div>
+      <details class="txlist" ${s.unassigned ? "open" : ""}><summary class="subhead">Transactions (${pi.txns.length}) <span class="help">click to ${s.unassigned ? "hide" : "review"} · change a category here for this import only, or add a rule below to do it every week</span></summary>
+      <div class="scroll"><table class="mini tx"><thead><tr><th class="txt">Date</th><th class="txt">Account</th><th class="txt">Description</th><th>Amount</th><th class="txt">Goes to</th></tr></thead><tbody>
+      ${txs.map(t => { const r = state.importRules.find(x => x.id === t.ruleId);
+        return `<tr class="${t.lineId === "ignore" ? "ignored" : !t.lineId ? "unassigned" : ""}"><td class="txt">${fmtDate(t.date)}</td><td class="txt">…${esc(t.acct)}</td>
+        <td class="txt desc" title="${esc(t.text)}">${esc(t.desc)}<br><span class="help">${esc((t.text || t.ref).replace(/\s+/g, " ").slice(0, 70))}</span></td>
+        <td class="${t.amount >= 0 ? "pos" : ""}">${fmt(t.amount)}</td>
+        <td class="txt"><select data-tx="${t.n}">${lineOptions(t.lineId, true)}</select>
+          <div class="help" style="margin:2px 0 0">${t.manual ? "changed by hand" : r ? "rule: " + esc(r.match || "(anything)") + (r.account ? " · …" + esc(r.account) : "") : "no rule matched"}</div></td></tr>`; }).join("")}
+      </tbody></table></div></details>`;
+  }
+  html += `<h3 class="subhead" style="margin-top:22px">Sorting rules <span class="help">checked top to bottom – the first match wins</span></h3>
+    <div class="scroll"><table class="edit-table"><thead><tr><th>If the description contains</th><th>Money</th><th>Account ends in</th><th>Put it in</th><th></th></tr></thead><tbody>
+    ${state.importRules.map((r, i) => `<tr>
+      <td><input class="name" data-r="${i}" data-rf="match" value="${esc(r.match)}" placeholder="(anything)"></td>
+      <td><select data-r="${i}" data-rf="dir">${[["any", "In or out"], ["in", "Money in"], ["out", "Money out"]].map(([k, v]) => `<option value="${k}"${r.dir === k ? " selected" : ""}>${v}</option>`).join("")}</select></td>
+      <td><input data-r="${i}" data-rf="account" value="${esc(r.account || "")}" placeholder="any" style="width:70px"></td>
+      <td><select data-r="${i}" data-rf="lineId">${lineOptions(r.lineId, true)}</select></td>
+      <td style="white-space:nowrap"><button class="icon" data-move="${i}:-1" title="Move up">↑</button><button class="icon" data-move="${i}:1" title="Move down">↓</button>
+        <button class="icon danger" data-rdel="${i}" title="Delete rule">✕</button></td></tr>`).join("")}
+    </tbody></table></div>
+    <div style="margin-top:10px"><button id="add-rule">+ Add a rule</button></div>`;
+  p.innerHTML = html;
+
+  const file = $("file"), drop = $("drop");
+  const read = f => { if (!f) return; const fr = new FileReader(); fr.onload = () => startImport(f.name, String(fr.result)); fr.readAsText(f); };
+  if (file) file.onchange = () => read(file.files[0]);
+  if (drop) { drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); }; drop.ondragleave = () => drop.classList.remove("over");
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); read(e.dataTransfer.files[0]); }; }
+  if (pendingImport) {
+    $("imp-cancel").onclick = () => { pendingImport = null; render(); };
+    $("imp-apply").onclick = applyImport;
+    const osNum = (id, key) => $(id).onchange = e => { const v = parseMoney(e.target.value); if (Number.isNaN(v)) return alert("Please enter a number");
+      pendingImport[key] = v || 0; render(); };
+    osNum("os-start", "osStart"); osNum("os-end", "osEnd");
+    $("os-line").onchange = e => { pendingImport.osLine = e.target.value; render(); };
+    p.querySelectorAll("select[data-tx]").forEach(sel => sel.onchange = () => {
+      const t = pendingImport.txns.find(x => x.n === Number(sel.dataset.tx)); t.lineId = sel.value; t.manual = true; render(); });
+  }
+  const recat = () => { if (pendingImport) categorize(pendingImport); commit(); };
+  p.querySelectorAll("[data-rf]").forEach(el => el.onchange = () => { state.importRules[el.dataset.r][el.dataset.rf] = el.value.trim ? el.value.trim() : el.value; recat(); });
+  p.querySelectorAll("[data-move]").forEach(b => b.onclick = () => { const [i, d] = b.dataset.move.split(":").map(Number), j = i + d;
+    if (j < 0 || j >= state.importRules.length) return; const R = state.importRules; [R[i], R[j]] = [R[j], R[i]]; recat(); });
+  p.querySelectorAll("[data-rdel]").forEach(b => b.onclick = () => { state.importRules.splice(Number(b.dataset.rdel), 1); recat(); });
+  $("add-rule").onclick = () => { state.importRules.unshift({ id: "r" + uid(), match: "", dir: "any", account: "", lineId: "" }); recat(); };
+}
+
 function panelSettings(p, F) {
   p.innerHTML = `<div class="settings">
     <div class="box"><h3>This week</h3>
@@ -603,7 +812,7 @@ function panelSettings(p, F) {
       <ol class="help" style="padding-left:18px">
         <li>The week ending ${fmtDate(F.weeks[0])} becomes "last week", using its forecast for comparison.</li>
         <li>Starting cash is set to that week's forecasted ending cash (${fmt(F.cols[0].end)}).</li>
-        <li>Then enter the actuals in <b>Last week vs. forecast</b> and click <b>Use as starting cash</b>.</li>
+        <li>Then import that week's Northrim file in <b>Bank import</b> and click <b>Use as starting cash</b> in Last week vs. forecast.</li>
       </ol>
       <button id="s-roll" class="primary">Start week ending ${fmtDate(F.weeks[0])} →</button>
     </div>
@@ -621,7 +830,7 @@ function panelSettings(p, F) {
     const w = F.weeks[0];
     if (!confirm(`Start the week ending ${fmtDate(w, { year: "numeric" })}? The current "last week" comparison will be replaced.`)) return;
     const rows = {}; for (const l of state.lines) { const c = F.cells[l.id][w]; if (c.total) rows[l.id] = { forecast: c.total, actual: null }; }
-    state.lastWeek = { weekEnding: w, startCash: state.startingCash, rows };
+    state.lastWeek = { weekEnding: w, startCash: state.startingCash, rows, osStart: state.osChecks || 0 };
     state.startingCash = Math.round(F.cols[0].end * 100) / 100; state.asOf = w;
     for (const id of Object.keys(state.overrides)) { for (const k of Object.keys(state.overrides[id])) if (k <= w) delete state.overrides[id][k];
       if (!Object.keys(state.overrides[id]).length) delete state.overrides[id]; }

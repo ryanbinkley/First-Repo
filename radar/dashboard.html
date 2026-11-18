@@ -172,7 +172,7 @@ dialog.modal::backdrop { background: rgba(0,0,0,.55); }
 dialog.modal form { padding: 18px 18px 14px; }
 dialog.modal h3 { font-family: var(--f-8bit); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
 dialog.modal label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
-dialog.modal input:not([type=radio]):not([type=checkbox]), dialog.modal select { width: 100%; font: inherit; color: var(--text); background: var(--surface-2);
+dialog.modal input:not([type=radio]):not([type=checkbox]), dialog.modal select, dialog.modal textarea { width: 100%; font: inherit; color: var(--text); background: var(--surface-2);
   border: 1px solid var(--border); border-radius: 3px; padding: 6px 8px; }
 dialog.modal input.money { font-family: var(--f-num); text-align: right; }
 dialog.modal .two { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
@@ -197,6 +197,8 @@ body.readonly #btn-add, body.readonly #btn-undo, body.readonly .addcell, body.re
 .a-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; padding: 3px 0; }
 .a-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .a-add input { flex: 1; min-width: 180px; }
+#published:empty { display: none; }
+#published { font-size: 12px; }
 .dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 34px 16px;
   border: 1px dashed var(--accent); border-radius: 4px; cursor: pointer; background: var(--surface-2); text-align: center; }
 .dropzone.over, .dropzone:hover { background: var(--accent-soft); }
@@ -245,10 +247,12 @@ code { font-family: var(--f-num); }
         <h1 class="wordmark">RADAR</h1>
         <div class="callsign" id="title">Cash threat detection</div>
         <div class="sub" id="subtitle"></div>
+        <div class="sub" id="published"></div>
       </div>
     </div>
     <div class="actions">
       <span class="status" id="status"></span>
+      <button id="btn-publish" class="primary" hidden title="Let everyone know this week's forecast is ready">Publish update</button>
       <button id="btn-theme" class="icon" title="Switch between the radar scope and the plotting table view">TABLE</button>
       <button id="btn-save" class="primary" title="Download a copy of this dashboard with all your changes saved in it">Save a copy</button>
     </div>
@@ -1140,6 +1144,8 @@ async function cloudStart() {
       <p class="help">Ask a Radar admin to add <b>${esc(me.email)}</b>.</p><button id="g-out">Sign out</button></div>`), $("g-out").onclick = () => sb.auth.signOut();
   document.body.classList.toggle("readonly", !canEdit());
   await reloadFromServer(true);
+  $("btn-publish").hidden = !canEdit(); $("btn-publish").onclick = publishDialog;
+  loadLastPublished();
   sb.channel("radar-changes")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "change_log" }, p => {
       if (p.new && p.new.user_id === me.id) return;              // our own change: already on screen
@@ -1173,7 +1179,7 @@ function scheduleRefresh(who) {
     const busy = saving || pendingImport || dragData || document.querySelector("dialog[open]") || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
     if (busy) return scheduleRefresh(who);
     undoStack = [];                                                 // someone else changed things: old undo steps no longer apply
-    await reloadFromServer(false);
+    await reloadFromServer(false); loadLastPublished();
     toast(`Updated by ${who || "someone else"}`);
   }, 1200);
 }
@@ -1299,6 +1305,59 @@ async function accessBox(box) {
     else { $("a-email").value = ""; toast(r.data === "invited" ? `Invited ${email}: they'll get access when they first sign in` : `${email} now has access`); }
     list(); };
   list();
+}
+
+/* ---------------- publish update (cloud mode) ---------------- */
+window.__openMail = url => { location.href = url; };            // replaced in tests
+async function loadLastPublished() {
+  const { data } = await sb.from("forecast_publications").select("published_at, published_by_email, as_of")
+    .order("published_at", { ascending: false }).limit(1);
+  const p = data && data[0];
+  $("published").textContent = p ? `Last published ${new Date(p.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })} by ${p.published_by_email}` : "Not published yet";
+}
+function publishSummary() {
+  const F = compute(), low = F.cols.reduce((m, c) => c.end < m.end ? c : m, F.cols[0]), last = F.cols[F.cols.length - 1];
+  const lw = lastWeekTotals(), big = significantOutflows(F).items.filter(i => i.w <= F.weeks[3]).sort((a, b) => b.amt - a.amt).slice(0, 6)
+    .sort((a, b) => a.w < b.w ? -1 : a.w > b.w ? 1 : b.amt - a.amt);
+  const lines = [
+    `• Cash today: ${fmtK(state.startingCash)}`,
+    `• Lowest point: ${fmtK(low.end)} (week ending ${fmtDate(low.week)})${low.end < state.minCash ? ` — below the ${fmtK(state.minCash)} cushion` : ""}`,
+    `• In 13 weeks: ${fmtK(last.end)}`];
+  if (lw.hasActual) lines.push(`• Last week: ended ${fmtK(lw.aEnd)} vs. ${fmtK(lw.fEnd)} forecast (${lw.aEnd - lw.fEnd >= 0 ? "+" : ""}${fmt(lw.aEnd - lw.fEnd)})`);
+  return { lines, big, low: Math.round(low.end), lowWeek: low.week, end13: Math.round(last.end),
+    lastWeekVariance: lw.hasActual ? Math.round(lw.aEnd - lw.fEnd) : null };
+}
+async function publishDialog() {
+  await saveChain;
+  if (saveError) return alert("Please wait until your changes are saved, then publish.");
+  const mem = await sb.from("members").select("email");
+  if (mem.error) return alert(mem.error.message);
+  const to = mem.data.map(m => m.email).filter(e => e.toLowerCase() !== me.email.toLowerCase());
+  const S = publishSummary(), link = location.origin + location.pathname;
+  const { value, d } = await modal({ title: "Publish this week's update", buttons: [
+      { label: "Cancel", value: null, skipCheck: true }, { label: "Copy text instead", value: "copy" },
+      { label: "Publish & open email", value: "mail", cls: "primary", validate: () => to.length ? null : "Nobody else has access yet. Add people in Settings → Access first." }],
+    body: `<p>This records the update in Radar and opens an email from you to the <b>${to.length}</b> other ${to.length === 1 ? "person" : "people"} with access${to.length ? ` (${esc(to.join(", "))})` : ""}.</p>
+      <label>Note to include (optional)</label><textarea name="note" rows="3" placeholder="e.g. Moved payroll a week later; added roof repair on Jan 8"></textarea>
+      <div class="mlist"><b>The email will say</b>${S.lines.map(l => `<div>${esc(l)}</div>`).join("")}
+        ${S.big.length ? `<div style="margin-top:6px">Big items in the next 4 weeks: ${S.big.length}</div>` : ""}</div>` });
+  if (value !== "mail" && value !== "copy") return;
+  const note = (d.querySelector("[name=note]").value || "").trim();
+  const subject = `Radar: cash forecast updated (week ending ${fmtDate(state.asOf, { year: "numeric" })})`;
+  const body = [`Radar has been updated for the week ending ${fmtDate(state.asOf, { year: "numeric" })}.`, "", ...S.lines,
+    ...(S.big.length ? ["", "Big items in the next 4 weeks:", ...S.big.map(i => `• ${fmtDate(i.w)} — ${i.name}: ${fmt(i.amt)}`)] : []),
+    ...(note ? ["", "Note: " + note] : []), "", "Open Radar: " + link].join("\n");
+  const r = await sb.from("forecast_publications").insert({ as_of: state.asOf, note, recipients: to.length,
+    summary: { low: S.low, lowWeek: S.lowWeek, end13: S.end13, lastWeekVariance: S.lastWeekVariance } });
+  if (r.error) return alert("Couldn't publish: " + r.error.message);
+  loadLastPublished();
+  if (value === "copy") {
+    try { await navigator.clipboard.writeText(subject + "\n\n" + body); toast("Published. Email text copied: paste it into a new email"); }
+    catch (e) { prompt("Published. Copy this text into an email:", subject + "\n\n" + body); }
+  } else {
+    toast("Published. Your email app should open: just tap Send");
+    window.__openMail(`mailto:${to.map(encodeURIComponent).join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  }
 }
 
 window.addEventListener("beforeunload", e => { if (dirty || saving) { e.preventDefault(); e.returnValue = ""; } });

@@ -158,4 +158,36 @@ do $$ begin
   if not exists (select 1 from public.change_log where table_name = 'members' and via = 'invite') then raise exception 'FAIL: invite acceptance not logged'; end if;
 end $$;
 
+-- 10. History loading: admins only, never overwrites existing weeks, history tables read-only otherwise
+select pg_temp.act_as('editor@example.com'); set role authenticated;
+do $$ begin
+  begin perform public.load_history('{"batch":"x"}'); raise exception 'FAIL: editor loaded history';
+  exception when insufficient_privilege then null; end;
+  begin insert into public.weekly_totals_history (week_ending) values ('2020-01-03'); raise exception 'FAIL: editor wrote history totals';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+select pg_temp.act_as('admin@example.com'); set role authenticated;
+do $$ declare r jsonb; before numeric; begin
+  select start_cash into before from public.week_closes order by week_ending desc limit 1;
+  r := public.load_history(jsonb_build_object('batch', 'test',
+    'lines', jsonb_build_array(jsonb_build_object('key', 'old_line', 'name', 'Old line', 'kind', 'out')),
+    'weeks', jsonb_build_array(
+       jsonb_build_object('week', '2024-01-05', 'start', 100, 'lines', jsonb_build_object('old_line', 12.34)),
+       jsonb_build_object('week', (select week_ending from public.week_closes order by week_ending desc limit 1), 'start', 1, 'lines', '{}'::jsonb)),
+    'snapshots', jsonb_build_array(jsonb_build_object('asOf', '2023-12-29', 'start', 100, 'file', 'f.xlsx', 'sha256', 'abc123',
+       'values', jsonb_build_array(jsonb_build_object('key', 'old_line', 'week', '2024-01-05', 'amount', 10))))));
+  if (r ->> 'weeks')::int <> 1 or (r ->> 'snapshots')::int <> 1 then raise exception 'FAIL: history load counts %', r; end if;
+  if (select start_cash from public.week_closes order by week_ending desc limit 1) <> before then raise exception 'FAIL: history overwrote an existing week'; end if;
+  if (select archived_at from public.forecast_lines where key = 'old_line') is null then raise exception 'FAIL: history line not archived'; end if;
+  r := public.load_history(jsonb_build_object('batch', 'again', 'snapshots', jsonb_build_array(jsonb_build_object('asOf', '2023-12-29', 'start', 100, 'file', 'f.xlsx', 'sha256', 'abc123', 'values', '[]'::jsonb))));
+  if (r ->> 'snapshots')::int <> 0 then raise exception 'FAIL: same workbook loaded twice'; end if;
+  if (select count(*) from public.change_log where via = 'history-load') <> 2 then raise exception 'FAIL: expected one summary log row per batch'; end if;
+end $$;
+reset role;
+do $$ begin
+  if (select count(*) from reporting.forecast_accuracy where week_ending = '2024-01-05' and line_key = 'old_line' and actual = 12.34) <> 1 then
+    raise exception 'FAIL: accuracy view missing history row'; end if;
+end $$;
+
 select 'ALL SECURITY TESTS PASSED' as result;

@@ -1107,12 +1107,14 @@ function panelSettings(p, F) {
       </ol>
       <button id="s-roll" class="primary">Start week ending ${fmtDate(F.weeks[0])} →</button>
     </div>
+    ${CLOUD && myRole === "admin" ? `<div class="box" id="s-history"></div>` : ""}
     ${CLOUD ? `<div class="box" id="s-access"></div>` : `<div class="box"><h3>Saving your work</h3>
       <p class="help">Your edits are kept in this browser automatically, but to keep them for good (or send them to someone), click
       <b>Save a copy</b> at the top. It downloads a new version of this file with everything in it. Open that file next time.</p>
       <p class="help">Tip: name the files by week, e.g. <code>radar-${addDays(state.asOf, 7)}.html</code>.</p>
     </div>`}</div>`;
   if (CLOUD) accessBox($("s-access"));
+  if (CLOUD && myRole === "admin") historyBox($("s-history"));
   const num = (id, key) => $(id).addEventListener("change", e => { const v = parseMoney(e.target.value);
     if (v === null || Number.isNaN(v)) { alert("Please enter a number"); return render(); } state[key] = v; commit(); });
   num("s-cash", "startingCash"); num("s-min", "minCash"); num("s-flag", "flagMin");
@@ -1219,7 +1221,7 @@ async function reloadFromServer(first) {
 function scheduleRefresh(who) {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(async () => {
-    const busy = saving || pendingImport || dragData || document.querySelector("dialog[open]") || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    const busy = saving || pendingImport || historyLoading || dragData || document.querySelector("dialog[open]") || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
     if (busy) return scheduleRefresh(who);
     undoStack = [];                                                 // someone else changed things: old undo steps no longer apply
     await reloadFromServer(false); loadLastPublished();
@@ -1350,6 +1352,47 @@ async function accessBox(box) {
   list();
 }
 
+
+/* ---------------- load history (admins, cloud mode) ---------------- */
+let historyLoading = false;
+const hp = html => { const el = document.getElementById("h-prog"); if (el) el.innerHTML = html; };
+function historyBox(box) {
+  box.innerHTML = `<h3>Load history</h3>
+    <p class="help">Admins only. Upload a Radar history file to add past weeks' actuals and forecasts. It never changes the
+      current forecast, and loading the same file twice adds nothing new.</p>
+    <label class="dropzone" style="padding:18px"><input type="file" id="h-file" accept=".json,application/json" hidden>
+      <span class="dz-title">Choose history file</span></label><div id="h-out" style="margin-top:10px"></div>`;
+  $("h-file").onchange = () => { const f = $("h-file").files[0]; if (!f) return;
+    const fr = new FileReader(); fr.onload = () => previewHistory(String(fr.result), f.name); fr.readAsText(f); };
+}
+function previewHistory(text, name) {
+  let H; try { H = JSON.parse(text); } catch (e) { return $("h-out").innerHTML = `<p class="neg">That isn't a Radar history file.</p>`; }
+  if (H.radarHistory !== 1 || !Array.isArray(H.batches)) return $("h-out").innerHTML = `<p class="neg">That isn't a Radar history file.</p>`;
+  const S = H.summary;
+  $("h-out").innerHTML = `<div class="mlist" style="margin-top:0">
+      <div><b>${esc(name)}</b></div>
+      <div>${fmtDate(S.from, { year: "numeric" })} → ${fmtDate(S.to, { year: "numeric" })} · ${S.weeks} weeks</div>
+      <div>${S.actualWeeks} weeks of actuals · ${S.forecastSnapshots} forecast snapshots · ${S.historyTotals} weeks of totals & notes</div>
+      <div>History-only lines: ${esc(S.historyLines.join(", "))}</div>
+      ${S.excluded.length ? `<div style="margin-top:6px"><b>Left out (failed checks):</b></div>` + S.excluded.map(x =>
+        `<div>${fmtDate(x.week, { year: "numeric" })}: ${x.actuals ? "" : "actuals"}${!x.actuals && !x.forecast ? " & " : ""}${x.forecast ? "" : "forecast"} — ${esc((x.why || [])[0] || "")}</div>`).join("") : ""}
+    </div>
+    <button id="h-go" class="primary" style="margin-top:10px">Load into Radar</button> <span id="h-prog" class="help"></span>`;
+  $("h-go").onclick = async () => {
+    $("h-go").disabled = true; const tot = {}; historyLoading = true;
+    try {
+      for (let i = 0; i < H.batches.length; i++) {
+        hp(`Loading ${i + 1} of ${H.batches.length}…`);
+        const r = await sb.rpc("load_history", { p_batch: H.batches[i] });
+        if (r.error) { hp(`<span class="neg">Stopped at batch ${i + 1}: ${esc(r.error.message)}. It's safe to try again.</span>`); if ($("h-go")) $("h-go").disabled = false; return; }
+        for (const [k, v] of Object.entries(r.data || {})) tot[k] = (tot[k] || 0) + v;
+      }
+    } finally { historyLoading = false; }
+    hp(`<span class="pos">Done.</span> Added ${tot.weeks || 0} weeks of actuals, ${tot.snapshots || 0} forecast snapshots
+      (${(tot.snapshotValues || 0).toLocaleString()} values), ${tot.totals || 0} weeks of totals${tot.weeks || tot.snapshots ? "" : " (already loaded, nothing new)"}.`);
+    if ($("h-go")) { $("h-go").disabled = false; $("h-go").textContent = "Load again"; } toast("History loaded");
+  };
+}
 /* ---------------- publish update (cloud mode) ---------------- */
 window.__openMail = url => { location.href = url; };            // replaced in tests
 async function loadLastPublished() {

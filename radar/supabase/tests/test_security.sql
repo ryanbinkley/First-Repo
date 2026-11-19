@@ -190,4 +190,30 @@ do $$ begin
     raise exception 'FAIL: accuracy view missing history row'; end if;
 end $$;
 
+-- 11. The AI hub's login: reads reporting views, writes only reports/questions through its two functions
+set role radar_hub;
+do $$ declare q1 uuid; q2 uuid; begin
+  perform count(*) from reporting.machine_latest; perform count(*) from reporting.radar_knowledge; perform count(*) from reporting.current_week;
+  begin perform 1 from public.settings; raise exception 'FAIL: hub reads public tables'; exception when insufficient_privilege then null; end;
+  begin perform public.save_radar('[]'); raise exception 'FAIL: hub changed the forecast'; exception when insufficient_privilege then null; end;
+  begin update public.radar_knowledge set body = 'x'; raise exception 'FAIL: hub answered a question'; exception when insufficient_privilege then null; end;
+  perform public.hub_add_report('2026-11-13', 'test-model', 'Summary $1,000', '[{"title":"T","text":"x"}]');
+  q1 := public.hub_add_question('Was the October dip from advertising?', 'other_in', 'analyst:oct-dip');
+  q2 := public.hub_add_question('Was the October dip from advertising?', 'other_in', 'analyst:oct-dip');   -- same question again
+  if q1 is null or q2 is not null then raise exception 'FAIL: hub question not de-duplicated'; end if;
+  begin perform public.hub_add_report('2026-11-13', 'm', 's', '{"not":"an array"}'); raise exception 'FAIL: bad themes accepted'; exception when raise_exception then null; end;
+end $$;
+reset role;
+select pg_temp.act_as('editor@example.com'); set role authenticated;
+do $$ begin
+  begin perform public.hub_add_report('2026-11-13', 'm', 's', '[]'); raise exception 'FAIL: user called a hub function'; exception when insufficient_privilege then null; end;
+  if (select count(*) from public.analyst_reports) <> 1 then raise exception 'FAIL: members cannot read analyst reports'; end if;
+  update public.radar_knowledge set body = 'Yes, two advertisers paused', status = 'answered' where qkey = 'analyst:oct-dip';
+  if not found then raise exception 'FAIL: editor cannot answer'; end if;
+  insert into public.radar_knowledge (kind, source, body) values ('note', 'person', 'A large advertiser cancelled in October');
+  begin insert into public.radar_knowledge (kind, source, question) values ('question', 'analyst', 'pretend'); raise exception 'FAIL: user posed as analyst';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+
 select 'ALL SECURITY TESTS PASSED' as result;

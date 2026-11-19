@@ -198,6 +198,13 @@ body.readonly #btn-add, body.readonly #btn-undo, body.readonly .addcell, body.re
 .a-add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .a-add input { flex: 1; min-width: 180px; }
 #published:empty { display: none; }
+#machine .analyst { border: 1px solid var(--border); border-left: 3px solid var(--machine); border-radius: 4px; padding: 10px 12px; margin: 10px 0; }
+#machine .analyst p { margin: 6px 0 0; }
+.unverified { text-decoration: underline wavy var(--amber); }
+#machine .kq { border-top: 1px solid var(--grid); padding: 10px 0; }
+#machine .kq textarea, dialog.modal textarea { width: 100%; margin-top: 6px; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px; padding: 6px 8px; }
+#machine .kn { padding: 6px 0; border-top: 1px dashed var(--grid); font-size: 13px; }
+
 :root { --machine: #6fc9ff; }
 :root[data-theme="light"] { --machine: #2c6e94; }
 .lg-plan, .lg-mach { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin: 0 5px 0 10px; }
@@ -1616,14 +1623,14 @@ async function loadBundle(force) {
   const r = await sb.rpc("history_bundle", { p_since: addDays(state.asOf, -7 * 156), p_snap_since: addDays(state.asOf, -7 * 60) });
   if (r.error || !r.data) { console.warn("history_bundle", r.error); return; }
   bundle = r.data; bundleAsOf = state.asOf; feedback = bundle.feedback || [];
-  runMachine();
+  runMachine(); loadKnowledge();
 }
 function runMachine() {
   if (bundle && bundleAsOf !== state.asOf) return loadBundle(true);     // a new week started: re-read history
   if (!bundle || !bundle.actuals.length) { MF = null; return renderMachine(); }
   try { MF = ENGINE.run(compute(), bundle, { dismissed: feedback.map(f => f.suggestion) }); }
   catch (e) { console.error(e); MF = null; }
-  renderChart(compute()); renderMachine(); saveMachineRun();
+  renderChart(compute()); renderMachine(); saveMachineRun(); askEngineQuestions();
 }
 function scheduleMachine() { clearTimeout(mfTimer); mfTimer = setTimeout(runMachine, 300); }
 const ENGINE_VERSION = "1";
@@ -1638,6 +1645,7 @@ function saveMachineRun() {
   if (!CLOUD || !MF || !canEdit()) return;
   const F = compute(), run = {
     as_of: state.asOf, engine_version: ENGINE_VERSION, facts: MF.facts,
+    plan: Object.fromEntries(state.lines.map(l => [l.id, Object.fromEntries(F.weeks.map(w => [w, Math.round(F.cells[l.id][w].total)]))])),
     cols: MF.cols.map((c, i) => ({ week: c.week, plan: Math.round(F.cols[i].end), radar: Math.round(c.end) })),
     suggestions: MF.suggestions.map(s => ({ id: s.id, line: s.key, name: s.name, method: s.method, label: s.label, confidence: s.confidence,
       cashEffect: s.cashEffect, dismissed: s.dismissed, reasons: ENGINE.explain(s),
@@ -1670,6 +1678,7 @@ function renderMachine() {
       + act.map(row).join("") : `<p class="help">No changes suggested. Your plan is in line with what history supports.</p>`}
     ${set.length ? `<details class="sg-set"><summary class="help">Set aside (${set.length})</summary>${set.map(s => { const f = feedback.find(x => x.suggestion === s.id);
       return row(s) + (f ? `<div class="help" style="margin:-6px 0 10px">Set aside by ${esc(f.by)} until ${fmtDate(f.until)}${f.reason ? `: “${esc(f.reason)}”` : ""}</div>` : ""); }).join("")}</details>` : ""}`;
+  el.insertAdjacentHTML("beforeend", knowledgeHTML()); wireKnowledge(el);
   $("mf-rescan").onclick = () => loadBundle(true);
   el.querySelectorAll("[data-why]").forEach(b => b.onclick = () => { mfOpen[b.dataset.why] = !mfOpen[b.dataset.why]; renderMachine(); });
   el.querySelectorAll("[data-apply]").forEach(b => b.onclick = () => applySuggestion(MF.suggestions.find(s => s.id === b.dataset.apply)));
@@ -1719,6 +1728,116 @@ async function dismissSuggestion(s) {
   if (r.error) return alert(r.error.message);
   feedback.push({ id: r.data.id, suggestion: r.data.suggestion_id, reason: r.data.reason, until: r.data.until, by: r.data.created_by_email });
   runMachine();
+}
+
+/* ---------------- what Radar should know: notes, questions, analyst report ---------------- */
+let knowledge = null, analyst = null, kAsked = new Set();
+async function loadKnowledge() {
+  if (!sb) return;
+  const [k, a] = await Promise.all([
+    sb.from("radar_knowledge").select("*").order("created_at", { ascending: false }).limit(200),
+    sb.from("analyst_reports").select("*").lte("as_of", state.asOf).order("as_of", { ascending: false }).order("created_at", { ascending: false }).limit(1)]);
+  if (!k.error) { knowledge = k.data; knowledge.forEach(x => x.qkey && kAsked.add(x.qkey)); }
+  if (!a.error) analyst = a.data[0] || null;
+  askEngineQuestions(); renderMachine();
+}
+// Questions Radar's engine asks: plans that break from recent actuals, and big misses last week.
+function engineQuestions() {
+  const out = [], info = Object.fromEntries(((bundle && bundle.lines) || []).map(l => [l.key, l]));
+  for (const s of (MF ? MF.suggestions : [])) if (s.method === "departure" && !s.dismissed)
+    out.push({ qkey: `departure:${s.key}:${Math.round(s.fit.planAvg)}`, line_key: s.key, suggestion_id: s.id,
+      question: `Your plan has ${s.name} at ${fmt(s.fit.planAvg)}/week, but it has averaged ${fmt(s.fit.L)}/week over the last 13 weeks. Is that deliberate? If so, what's the reason?` });
+  const lw = state.lastWeek, misses = [];
+  if (lw && lw.rows) for (const l of state.lines) {
+    const r = lw.rows[l.id]; if (!r || r.actual == null || (info[l.id] && info[l.id].category !== "flow")) continue;
+    const f = Number(r.forecast || 0), a = Number(r.actual), d = a - f;
+    if (Math.abs(d) >= Math.max(15000, Math.abs(f) * 0.25))
+      misses.push({ size: Math.abs(d), qkey: `variance:${lw.weekEnding}:${l.id}`, line_key: l.id,
+        question: `Last week (ending ${fmtDate(lw.weekEnding)}) ${l.name} came in ${fmt(Math.abs(d))} ${d > 0 ? "above" : "below"} forecast (${fmt(a)} vs. ${fmt(f)}). Was that a one-off, a timing shift, or something that will continue?` });
+  }
+  misses.sort((a, b) => b.size - a.size).slice(0, 3).forEach(m => { delete m.size; out.push(m); });   // the three biggest only
+  return out;
+}
+async function askEngineQuestions() {
+  if (!knowledge || !canEdit()) return;
+  const fresh = engineQuestions().filter(q => !kAsked.has(q.qkey));
+  if (!fresh.length) return;
+  fresh.forEach(q => kAsked.add(q.qkey));
+  const r = await sb.from("radar_knowledge").upsert(fresh.map(q => Object.assign({ kind: "question", source: "engine" }, q)),
+    { onConflict: "qkey", ignoreDuplicates: true }).select("*");
+  if (!r.error && r.data) { knowledge = r.data.concat(knowledge); renderMachine(); }
+}
+// Numbers in AI-written text must be traceable to Radar's own figures.
+function knownNumbers() {
+  const set = [], walk = v => { if (typeof v === "number" && isFinite(v)) set.push(Math.abs(v)); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+  if (MF) { walk(MF.suggestions.map(s => [s.fit, s.cashEffect, s.impact, s.planWeekly, s.machineWeekly, s.backtest])); walk(MF.cols.map(c => [c.end, c.delta])); }
+  walk(compute().cols.map(c => [c.end, c.cin, c.cout, c.start])); walk(state.lastWeek); walk(state.startingCash);
+  return set;
+}
+function checkNumbers(text, known) {
+  let total = 0, found = 0;
+  const html = esc(text).replace(/\$\s?(\d[\d,]*(?:\.\d+)?)\s?([kKmM])?/g, (m, n, unit) => {
+    const v = parseFloat(n.replace(/,/g, "")) * (unit ? (/[kK]/.test(unit) ? 1e3 : 1e6) : 1), tol = unit ? (/[kK]/.test(unit) ? 1000 : 1e5) : Math.max(1, v * 0.01);
+    total++; const ok = known.some(x => Math.abs(x - v) <= tol); if (ok) found++;
+    return ok ? m : `<span class="unverified" title="Not found in Radar's figures. Check before relying on it.">${m}</span>`;
+  });
+  return { html, total, found };
+}
+function knowledgeHTML() {
+  if (!knowledge) return "";
+  const edit = canEdit(), open = knowledge.filter(k => k.kind === "question" && k.status === "open");
+  const done = knowledge.filter(k => k.kind === "note" || k.status === "answered").slice(0, 12);
+  const lineName = k => { const l = state.lines.find(x => x.id === k) || ((bundle && bundle.lines) || []).find(x => x.key === k); return l ? (l.name || "") : ""; };
+  let h = "";
+  if (analyst) {
+    const known = knownNumbers(), parts = [checkNumbers(analyst.summary || "", known)].concat((analyst.themes || []).map(t => Object.assign(checkNumbers(t.text || "", known), { title: t.title })));
+    const tot = parts.reduce((s, p) => s + p.total, 0), fnd = parts.reduce((s, p) => s + p.found, 0);
+    h += `<div class="analyst"><div class="sg-top"><b>Analyst's take</b> <span class="chip-conf">AI · ${esc(analyst.model || "model")} · ${fmtDate(analyst.as_of)}</span>
+        <span class="help sg-fx">${tot ? `${fnd} of ${tot} figures match Radar's data${fnd < tot ? "; unmatched ones are underlined" : ""}` : ""}</span></div>
+      ${parts[0].html ? `<p>${parts[0].html}</p>` : ""}${parts.slice(1).map(p => `<p><b>${esc(p.title || "")}</b> ${p.html}</p>`).join("")}</div>`;
+  }
+  if (open.length) h += `<h3 class="subhead" style="margin-top:14px">Questions from Radar (${open.length})</h3>` + open.map(q => `<div class="kq">
+      <div>${esc(q.question)} <span class="help">· ${q.source === "analyst" ? "AI analyst" : "Radar"}</span></div>
+      ${edit ? `<textarea data-ans="${q.id}" rows="2" placeholder="Your answer (it becomes context for Radar's analysis)"></textarea>
+      ${q.suggestion_id && MF && MF.suggestions.some(s => s.id === q.suggestion_id && !s.dismissed) ? `<label class="help"><input type="checkbox" data-keep="${q.id}" checked> Keep my number and set this suggestion aside for 4 weeks</label>` : ""}
+      <div class="sg-btns"><button data-answer="${q.id}">Answer</button><button class="link" data-skip="${q.id}">Skip</button></div>` : ""}</div>`).join("");
+  h += `<details class="sg-set"${open.length ? "" : ""}><summary class="help">What Radar knows (${knowledge.filter(k => k.kind === "note" || k.status === "answered").length})</summary>
+      ${done.map(k => `<div class="kn"><span class="help">${fmtDate(String(k.answered_at || k.created_at).slice(0, 10))} · ${esc(k.answered_by_email || k.created_by_email || "")}${k.line_key ? " · " + esc(lineName(k.line_key)) : ""}</span><br>
+        ${k.kind === "question" ? `<i>${esc(k.question)}</i><br>` : ""}${esc(k.body || "")}</div>`).join("") || `<p class="help">Nothing yet.</p>`}</details>
+    ${edit ? `<button class="link" id="k-add">+ Tell Radar something</button>` : ""}`;
+  return h;
+}
+function wireKnowledge(el) {
+  el.querySelectorAll("[data-answer]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.answer, ta = el.querySelector(`[data-ans="${id}"]`), text = ta.value.trim();
+    if (!text) return alert("Please type an answer, or tap Skip.");
+    const r = await sb.from("radar_knowledge").update({ body: text, status: "answered", answered_by_email: me.email, answered_at: new Date().toISOString() }).eq("id", id);
+    if (r.error) return alert(r.error.message);
+    const q = knowledge.find(x => x.id === id); Object.assign(q, { body: text, status: "answered", answered_by_email: me.email, answered_at: new Date().toISOString() });
+    const keep = el.querySelector(`[data-keep="${id}"]`);
+    if (keep && keep.checked) {
+      const f = await sb.from("suggestion_feedback").insert({ suggestion_id: q.suggestion_id, reason: text, until: addDays(state.asOf, 28) }).select("id, suggestion_id, reason, until, created_by_email").single();
+      if (!f.error) { feedback.push({ id: f.data.id, suggestion: f.data.suggestion_id, reason: f.data.reason, until: f.data.until, by: f.data.created_by_email }); runMachine(); }
+    }
+    toast("Thanks: Radar will use that"); renderMachine();
+  });
+  el.querySelectorAll("[data-skip]").forEach(b => b.onclick = async () => {
+    const r = await sb.from("radar_knowledge").update({ status: "dismissed" }).eq("id", b.dataset.skip);
+    if (r.error) return alert(r.error.message);
+    knowledge.find(x => x.id === b.dataset.skip).status = "dismissed"; renderMachine();
+  });
+  const add = el.querySelector("#k-add");
+  if (add) add.onclick = async () => {
+    const { value, d } = await modal({ title: "Tell Radar something", buttons: [{ label: "Cancel", value: null, skipCheck: true },
+        { label: "Save", value: "ok", cls: "primary", validate: d => fv(d, "note").trim() ? null : "Please write something" }],
+      body: `<p class="help">Facts that help Radar understand the numbers, e.g. "A large advertiser cancelled in October" or "Payroll includes a one-time bonus in December".</p>
+        <label>Note</label><textarea name="note" rows="3"></textarea>
+        <label>About (optional)</label><select name="line"><option value="">Nothing specific</option>${state.lines.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join("")}</select>` });
+    if (value !== "ok") return;
+    const r = await sb.from("radar_knowledge").insert({ kind: "note", source: "person", body: fv(d, "note").trim(), line_key: fv(d, "line") || null }).select("*").single();
+    if (r.error) return alert(r.error.message);
+    knowledge.unshift(r.data); toast("Saved"); renderMachine();
+  };
 }
 
 /* ---------------- forecast accuracy (cloud mode) ---------------- */

@@ -93,3 +93,5 @@ create view reporting.current_week as
   select as_of, starting_cash, min_cash, flag_min, os_checks, weeks from public.settings;
 
 grant select on all tables in schema reporting to radar_readonly, radar_hub;
+-- Bank transaction descriptions can name private individuals (e.g. subscriber refunds); the hub doesn't need them.
+revoke select on reporting.bank_transactions from radar_hub;

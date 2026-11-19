@@ -194,6 +194,7 @@ end $$;
 set role radar_hub;
 do $$ declare q1 uuid; q2 uuid; begin
   perform count(*) from reporting.machine_latest; perform count(*) from reporting.radar_knowledge; perform count(*) from reporting.current_week;
+  begin perform 1 from reporting.bank_transactions; raise exception 'FAIL: hub reads bank transactions'; exception when insufficient_privilege then null; end;
   begin perform 1 from public.settings; raise exception 'FAIL: hub reads public tables'; exception when insufficient_privilege then null; end;
   begin perform public.save_radar('[]'); raise exception 'FAIL: hub changed the forecast'; exception when insufficient_privilege then null; end;
   begin update public.radar_knowledge set body = 'x'; raise exception 'FAIL: hub answered a question'; exception when insufficient_privilege then null; end;

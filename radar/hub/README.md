@@ -33,7 +33,7 @@ hub              ──write─►  hub_add_report(...)        (append-only repo
 | `radar_knowledge` | Notes from people, and questions with their answers (`status` open / answered / dismissed) |
 | `suggestion_history` | Suggestions applied or set aside, with reasons |
 | `analyst_reports` | Previous reports from the hub |
-| `bank_transactions`, `week_summary`, `forecast_publications`, `change_history` | Supporting detail |
+| `week_summary`, `forecast_publications`, `change_history` | Supporting detail (bank transactions are deliberately not available: their descriptions can name private individuals) |
 
 Line categories: **flow** = recurring business cash (what history can predict), **decision** = amounts management
 sets (tax payments, owner distributions, owner transfers in), **transfer** = one-off movements. Don't forecast decisions.

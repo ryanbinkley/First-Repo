@@ -1018,7 +1018,7 @@ function readBAI2(text) {
     if (r.code === "02") { asOf = ymd(f[4]); grpTotal = 0; }
     else if (r.code === "03") {
       acct = f[1].trim(); acctTotal = 0;
-      bal = { acct: acct.slice(-4), account: acct, date: asOf, credits: 0, debits: 0 };
+      bal = { acct: acct.slice(-4), date: asOf, credits: 0, debits: 0 };   // last four only: full account numbers are never kept
       for (let i = 3; i + 1 < f.length && f[i] !== "";) {
         const code = f[i].trim(), amt = cents(f[i + 1]); acctTotal += amt;
         if (code === "010") bal.openingLedger = amt; else if (code === "015") bal.closingLedger = amt;

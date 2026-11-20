@@ -982,7 +982,81 @@ function parseCSV(text) {
   return rows;
 }
 const squash = s => String(s || "").toUpperCase().replace(/\s+/g, " ").trim();
+/* ---------------- BAI2 bank files ---------------- */
+// BAI2 (Cash Management Balance Reporting Specification v2): records end with "/", amounts are in cents,
+// 88 records continue the previous record. 01/02/03/16/49/98/99 = file, group, account, detail, trailers.
+const BAI_CODES = {
+  108: "CREDIT", 115: "LOCKBOX DEPOSIT", 142: "ACH CREDIT RECEIVED", 145: "ACH CONCENTRATION CREDIT",
+  165: "PREAUTHORIZED ACH CREDIT", 166: "ACH SETTLEMENT CREDIT", 169: "MISCELLANEOUS ACH CREDIT", 175: "CHECK DEPOSIT PACKAGE",
+  195: "INCOMING WIRE TRANSFER", 201: "INCOMING INTERNAL TRANSFER", 206: "BOOK TRANSFER CREDIT", 275: "ZBA CREDIT TRANSFER",
+  301: "DEPOSIT", 354: "INTEREST CREDIT", 399: "MISCELLANEOUS CREDIT",
+  451: "ACH DEBIT RECEIVED", 455: "PREAUTHORIZED ACH DEBIT", 466: "ACH SETTLEMENT DEBIT", 469: "MISCELLANEOUS ACH DEBIT",
+  475: "CHECK PAID", 495: "OUTGOING WIRE TRANSFER", 501: "OUTGOING INTERNAL TRANSFER", 506: "BOOK TRANSFER DEBIT",
+  555: "DEPOSITED ITEM RETURNED", 575: "ZBA DEBIT TRANSFER", 698: "MISCELLANEOUS FEES", 699: "MISCELLANEOUS DEBIT" };
+const isBAI2 = text => /^\s*01,/.test(text);
+function readBAI2(text) {
+  // 1. physical lines -> logical records (88 = continuation of the previous record)
+  const recs = [];
+  for (let line of text.replace(/^﻿/, "").split(/\r?\n/)) {
+    line = line.trim(); if (!line) continue;
+    const body = line.replace(/\/$/, "");
+    if (body.startsWith("88,")) {
+      if (!recs.length) throw new Error("BAI2: continuation record with nothing to continue");
+      const prev = recs[recs.length - 1];
+      prev.text += (prev.code === "16" ? "" : ",") + body.slice(3);   // detail text continues mid-word; other records continue with a new field
+    } else recs.push({ code: body.slice(0, 2), text: body });
+  }
+  if (!recs.length || recs[0].code !== "01") throw new Error("This doesn't look like a BAI2 file (no 01 file header).");
+  const ymd = s => { const m = /^(\d{2})(\d{2})(\d{2})$/.exec(s || ""); if (!m) throw new Error(`BAI2: bad date "${s}"`); return `20${m[1]}-${m[2]}-${m[3]}`; };
+  const cents = s => { const t = (s || "").trim(); if (!t) return 0; if (!/^[+-]?\d+$/.test(t)) throw new Error(`BAI2: bad amount "${s}"`); return Number(t) / 100; };
+  // skip the variable fields that follow a funds-type code
+  const fundsSkip = (f, i) => { const t = (f[i] || "").toUpperCase(); if (t === "V") return i + 3; if (t === "S") return i + 4; if (t === "D") return i + 2 + 2 * (Number(f[i + 1]) || 0); return i + 1; };
+  const txns = [], balances = [], issues = [];
+  let asOf = null, acct = null, bal = null, acctTotal = 0, grpTotal = 0, fileTotal = 0, n = 0;
+  for (const r of recs) {
+    const f = r.text.split(",");
+    if (r.code === "02") { asOf = ymd(f[4]); grpTotal = 0; }
+    else if (r.code === "03") {
+      acct = f[1].trim(); acctTotal = 0;
+      bal = { acct: acct.slice(-4), account: acct, date: asOf, credits: 0, debits: 0 };
+      for (let i = 3; i + 1 < f.length && f[i] !== "";) {
+        const code = f[i].trim(), amt = cents(f[i + 1]); acctTotal += amt;
+        if (code === "010") bal.openingLedger = amt; else if (code === "015") bal.closingLedger = amt;
+        else if (code === "040") bal.openingAvailable = amt; else if (code === "045") bal.closingAvailable = amt;
+        i = fundsSkip(f, i + 3);
+      }
+      balances.push(bal);
+    }
+    else if (r.code === "16") {
+      if (!acct) throw new Error("BAI2: transaction before any account record");
+      const code = Number(f[1]), amt = cents(f[2]); acctTotal += amt;
+      const i = fundsSkip(f, 3), bankRef = (f[i] || "").trim(), custRef = (f[i + 1] || "").trim(), detail = f.slice(i + 2).join(",").trim();
+      if (code >= 100 && code < 400) bal.credits += amt; else if (code >= 400 && code < 700) bal.debits += amt; else continue;   // 890 etc. are information only
+      txns.push({ n: n++, date: asOf, amount: code < 400 ? amt : -amt, acct: acct.slice(-4), acctName: "",
+        desc: BAI_CODES[code] || (code < 400 ? `CREDIT (BAI ${code})` : `DEBIT (BAI ${code})`), ref: bankRef, ref2: custRef, text: detail, type: String(code), trc: "" });
+    }
+    else if (r.code === "49") {
+      const ctl = cents(f[1]);
+      if (Math.abs(ctl - acctTotal) > 0.005) issues.push(`Account …${acct.slice(-4)} on ${asOf}: control total $${ctl.toFixed(2)} doesn't match its records ($${acctTotal.toFixed(2)}).`);
+      grpTotal += ctl; acct = null;
+    }
+    else if (r.code === "98") { const ctl = cents(f[1]); if (Math.abs(ctl - grpTotal) > 0.005) issues.push(`Group ${asOf}: control total doesn't match.`); fileTotal += ctl; }
+    else if (r.code === "99") { const ctl = cents(f[1]); if (Math.abs(ctl - fileTotal) > 0.005) issues.push("File control total doesn't match."); }
+  }
+  if (!recs.some(r => r.code === "99")) issues.push("The file has no 99 trailer: it may be incomplete.");
+  for (const b of balances) if (b.openingLedger != null && b.closingLedger != null) {
+    const gap = Math.round((b.openingLedger + b.credits - b.debits - b.closingLedger) * 100) / 100;
+    b.ties = Math.abs(gap) < 0.005; b.gap = gap;
+    if (!b.ties) issues.push(`Account …${b.acct} on ${fmtDate(b.date)}: opening ${fmt(b.openingLedger)} + credits − debits doesn't reach the closing balance ${fmt(b.closingLedger)} (off by $${gap.toFixed(2)}).`);
+  }
+  return { txns, balances, issues };
+}
+// A bank file: Northrim account-activity CSV, or BAI2 (the bank's automated daily format)
 function readBankFile(text) {
+  if (isBAI2(text)) return Object.assign({ format: "bai2" }, readBAI2(text));
+  return { format: "csv", txns: readCSVBank(text), balances: [], issues: [] };
+}
+function readCSVBank(text) {
   const rows = parseCSV(text.replace(/^﻿/, ""));
   if (rows.length < 2) throw new Error("The file has no transactions in it.");
   const head = rows[0].map(h => h.trim().toLowerCase());
@@ -1004,7 +1078,7 @@ function matchRule(t) {
     if (r.dir === "in" && t.amount <= 0) continue;
     if (r.dir === "out" && t.amount >= 0) continue;
     if (r.account && !t.acct.endsWith(String(r.account).trim())) continue;
-    if (r.match && !hay.includes(squash(r.match))) continue;
+    if (r.match && !hay.includes(squash(r.match)) && !hay.replace(/ /g, "").includes(squash(r.match).replace(/ /g, ""))) continue;   // spacing-insensitive
     return r;
   }
   return null;
@@ -1012,13 +1086,20 @@ function matchRule(t) {
 function categorize(pi) {
   for (const t of pi.txns) if (!t.manual) { const r = matchRule(t); t.ruleId = r ? r.id : null; t.lineId = r ? r.lineId : ""; }
 }
-function startImport(fileName, text) {
-  let txns;
-  try { txns = readBankFile(text); } catch (e) { alert(e.message); return; }
+// files: [{name, text}], e.g. one Northrim CSV, or several daily BAI2 files
+function startImport(files) {
+  const parsed = [];
+  for (const f of files) {
+    try { parsed.push(Object.assign({ name: f.name, text: f.text }, readBankFile(f.text))); }
+    catch (e) { alert(`${f.name}: ${e.message}`); return; }
+  }
+  let n = 0; const txns = [];
+  parsed.forEach((p, i) => p.txns.forEach(t => { t.n = n++; t.file = i; txns.push(t); }));
   if (!txns.length) { alert("No transactions found in that file."); return; }
   const lw = state.lastWeek, apLine = state.lines.find(l => l.id === "ap") || state.lines.filter(l => l.kind === "out").slice(-1)[0];
-  pendingImport = { fileName, text, txns, osStart: lw.osStart != null ? lw.osStart : 0, osEnd: state.osChecks != null ? state.osChecks : 0,
-    osLine: apLine ? apLine.id : "" };
+  pendingImport = { files: parsed, fileName: parsed.map(p => p.name).join(", "), txns,
+    balances: parsed.flatMap(p => p.balances), issues: parsed.flatMap(p => p.issues.map(x => `${p.name}: ${x}`)),
+    osStart: lw.osStart != null ? lw.osStart : 0, osEnd: state.osChecks != null ? state.osChecks : 0, osLine: apLine ? apLine.id : "" };
   categorize(pendingImport); render();
 }
 function importSummary(pi) {
@@ -1060,15 +1141,16 @@ function panelImport(p) {
   const lw = state.lastWeek;
   let html = "";
   if (!pendingImport) {
-    html += `<p class="help">Download the account activity CSV from Northrim for the week ending <b>${fmtDate(lw.weekEnding, { year: "numeric" })}</b>
-      (all accounts in one file), then drop it here. You'll see every transaction and where it's going before anything changes.</p>
-      <label class="dropzone" id="drop"><input type="file" id="file" accept=".csv,text/csv" hidden>
-        <span class="dz-title">Drop the Northrim CSV here</span><span class="help" style="margin:0">or click to choose a file</span></label>
+    html += `<p class="help">Add the bank activity for the week ending <b>${fmtDate(lw.weekEnding, { year: "numeric" })}</b>: the Northrim
+      account-activity CSV (all accounts in one file), or the bank's daily BAI2 files (select several at once). You'll see every transaction
+      and where it's going before anything changes.</p>
+      <label class="dropzone" id="drop"><input type="file" id="file" accept=".csv,.txt,.bai,.bai2,text/csv,text/plain" multiple hidden>
+        <span class="dz-title">Drop bank files here</span><span class="help" style="margin:0">CSV or BAI2 · or click to choose</span></label>
       ${lw.imported ? `<p class="help" style="margin-top:10px">Last import: ${esc(lw.imported.fileName)} · ${lw.imported.count} transactions · ${esc(new Date(lw.imported.at).toLocaleString())}</p>` : ""}`;
   } else {
     const pi = pendingImport, s = importSummary(pi), lineById = Object.fromEntries(state.lines.map(l => [l.id, l]));
     const dates = pi.txns.map(t => t.date).sort(), accts = [...new Set(pi.txns.map(t => (t.acctName ? t.acctName + " " : "") + "…" + t.acct))];
-    const warn = [];
+    const warn = pi.issues.slice();
     if (s.outside) warn.push(`${s.outside} transaction(s) are dated outside the week ${fmtDate(addDays(lw.weekEnding, -6))}–${fmtDate(lw.weekEnding)}. Check you downloaded the right week, or start the new week first (Settings).`);
     if (s.unassigned) warn.push(`${s.unassigned} transaction(s) need a category – pick one below, or add a rule.`);
     if (Math.abs(s.ignoredNet) > 0.5) warn.push(`Transfers marked "ignore" don't net to zero (${fmt(s.ignoredNet)}). Some money may have moved to an account that isn't in this file.`);
@@ -1081,6 +1163,13 @@ function panelImport(p) {
         <div class="help" style="margin:2px 0 0">${accts.map(esc).join(" · ")}</div></div>
         <div class="actions"><button id="imp-cancel">Cancel</button><button id="imp-apply" class="primary">Use these as last week's actuals</button></div></div>
       ${warn.map(w => `<div class="banner">${esc(w)}</div>`).join("")}
+      ${pi.balances.length ? `<details class="txlist"${pi.balances.some(b => b.ties === false) ? " open" : ""}><summary class="subhead">Bank balances (${pi.balances.length})
+          <span class="help">${pi.balances.every(b => b.ties !== false) ? "every account and day ties: opening + credits − debits = closing" : "some days don't tie: see below"}</span></summary>
+        <div class="scroll" style="margin-bottom:14px"><table class="mini"><thead><tr><th class="txt">Account</th><th class="txt">Date</th><th>Opening</th><th>Credits</th><th>Debits</th><th>Closing</th><th class="txt">Ties</th></tr></thead><tbody>
+        ${pi.balances.map(b => `<tr><td class="txt">…${esc(b.acct)}</td><td class="txt">${fmtDate(b.date)}</td><td>${b.openingLedger != null ? fmt(b.openingLedger) : "–"}</td>
+          <td>${fmt(b.credits)}</td><td>${fmt(b.debits)}</td><td>${b.closingLedger != null ? fmt(b.closingLedger) : "–"}</td>
+          <td class="txt">${b.ties == null ? "–" : b.ties ? '<span class="pos">✓</span>' : `<span class="neg">off by $${b.gap.toFixed(2)}</span>`}</td></tr>`).join("")}
+        </tbody></table></div></details>` : ""}
       <div class="settings" style="margin-bottom:14px">
         <div class="box"><h3>Outstanding checks</h3>
           <p class="help">Checks written but not yet cleared the bank. The bank file only shows what cleared; this keeps the forecast on the same
@@ -1130,10 +1219,12 @@ function panelImport(p) {
   p.innerHTML = html;
 
   const file = $("file"), drop = $("drop");
-  const read = f => { if (!f) return; const fr = new FileReader(); fr.onload = () => startImport(f.name, String(fr.result)); fr.readAsText(f); };
-  if (file) file.onchange = () => read(file.files[0]);
+  const read = list => { const fs = [...(list || [])]; if (!fs.length) return;
+    Promise.all(fs.map(f => new Promise((ok, bad) => { const fr = new FileReader(); fr.onload = () => ok({ name: f.name, text: String(fr.result) }); fr.onerror = bad; fr.readAsText(f); })))
+      .then(files => startImport(files.sort((a, b) => a.name < b.name ? -1 : 1)), e => alert("Couldn't read the file: " + e)); };
+  if (file) file.onchange = () => read(file.files);
   if (drop) { drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); }; drop.ondragleave = () => drop.classList.remove("over");
-    drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); read(e.dataTransfer.files[0]); }; }
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); read(e.dataTransfer.files); }; }
   if (pendingImport) {
     $("imp-cancel").onclick = () => { pendingImport = null; render(); };
     $("imp-apply").onclick = applyImport;
@@ -1374,25 +1465,28 @@ async function sha256Hex(s) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
-// Store the original CSV and every transaction with its category.
+// Store each original bank file and every transaction with its category (and BAI2 balances).
 function cloudImport(pi, weekEnding) {
+  pi.files.forEach((file, fi) => cloudImportFile(file, pi.txns.filter(t => t.file === fi), weekEnding));
+}
+function cloudImportFile(file, fileTxns, weekEnding) {
   queueCloud(async () => {
-    const sha = await sha256Hex(pi.text), path = `${weekEnding}/${sha.slice(0, 16)}-${pi.fileName.replace(/[^\w.-]+/g, "_")}`;
-    const up = await sb.storage.from("bank-files").upload(path, new Blob([pi.text], { type: "text/csv" }), { upsert: false });
+    const sha = await sha256Hex(file.text), path = `${weekEnding}/${sha.slice(0, 16)}-${file.name.replace(/[^\w.-]+/g, "_")}`;
+    const up = await sb.storage.from("bank-files").upload(path, new Blob([file.text], { type: "text/plain" }), { upsert: false });
     if (up.error && !/exists|duplicate/i.test(up.error.message)) throw up.error;
     const seen = {}, txns = [];
-    for (const t of pi.txns) {
+    for (const t of fileTxns) {
       const k = [t.acct, t.date, t.amount.toFixed(2), t.desc, t.ref, t.ref2, t.text, t.type, t.trc].join("|");
       seen[k] = (seen[k] || 0) + 1;
       txns.push({ fp: await sha256Hex(k + "#" + seen[k]), acct: t.acct, acctName: t.acctName, date: t.date, amount: t.amount,
         desc: t.desc, ref: t.ref, ref2: t.ref2, text: t.text, type: t.type, trc: t.trc,
         line: t.lineId || "", manual: !!t.manual, rule: t.ruleId || "" });
     }
-    const dates = pi.txns.map(t => t.date).sort();
-    const r = await sb.rpc("import_bank_file", { p_file: { name: pi.fileName, path, sha256: sha, firstDate: dates[0],
-      lastDate: dates[dates.length - 1], weekEnding }, p_txns: txns });
+    const dates = fileTxns.map(t => t.date).sort();
+    const r = await sb.rpc("import_bank_file", { p_file: { name: file.name, path, sha256: sha, firstDate: dates[0],
+      lastDate: dates[dates.length - 1], weekEnding, format: file.format, balances: file.balances }, p_txns: txns });
     if (r.error) throw r.error;
-    toast(`Bank file saved: ${r.data.newTransactions} new transactions${r.data.alreadyKnown ? `, ${r.data.alreadyKnown} already on file` : ""}`);
+    toast(`${file.name}: ${r.data.newTransactions} new transactions${r.data.alreadyKnown ? `, ${r.data.alreadyKnown} already on file` : ""}${r.data.skippedOverlap ? `, ${r.data.skippedOverlap} skipped (those days are already on file from another format)` : ""}`);
   });
 }
 async function accessBox(box) {

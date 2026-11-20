@@ -86,9 +86,9 @@ select pg_temp.act_as('editor@example.com'); set role authenticated;
 do $$ declare f uuid; n int; begin
   insert into public.bank_files (file_name, sha256, row_count) values ('test.csv', 'abc', 1) returning id into f;
   insert into public.bank_transactions (file_id, fingerprint, account_last4, post_date, amount)
-    values (f, 'fp-1', '4996', '2026-11-13', -12.34);
+    values (f, 'fp-1', '1234', '2026-11-13', -12.34);
   begin insert into public.bank_transactions (file_id, fingerprint, account_last4, post_date, amount)
-          values (f, 'fp-1', '4996', '2026-11-13', -12.34);
+          values (f, 'fp-1', '1234', '2026-11-13', -12.34);
         raise exception 'FAIL: duplicate transaction accepted';
   exception when unique_violation then null; end;
   begin insert into public.bank_files (file_name, sha256, row_count) values ('again.csv', 'abc', 1);
@@ -215,6 +215,35 @@ do $$ begin
   begin insert into public.radar_knowledge (kind, source, question) values ('question', 'analyst', 'pretend'); raise exception 'FAIL: user posed as analyst';
   exception when insufficient_privilege then null; end;
 end $$;
+reset role;
+
+-- 12. BAI2: a day already imported from the CSV isn't counted twice; daily balances are stored; viewers can't write them
+select pg_temp.act_as('editor@example.com'); set role authenticated;
+do $$ declare r jsonb; begin
+  r := public.import_bank_file('{"name":"w.csv","path":"x/w.csv","sha256":"csv-1","firstDate":"2026-11-09","lastDate":"2026-11-09","weekEnding":"2026-11-13"}',
+         '[{"fp":"c1","acct":"1234","date":"2026-11-09","amount":-50}]');
+  if (r ->> 'newTransactions')::int <> 1 then raise exception 'FAIL: csv import %', r; end if;
+  r := public.import_bank_file('{"name":"d.txt","path":"x/d.txt","sha256":"bai-1","firstDate":"2026-11-09","lastDate":"2026-11-10","weekEnding":"2026-11-13","format":"bai2",
+         "balances":[{"acct":"1234","date":"2026-11-10","openingLedger":100,"closingLedger":75,"credits":0,"debits":25,"ties":true}]}',
+         '[{"fp":"b1","acct":"1234","date":"2026-11-09","amount":-50},{"fp":"b2","acct":"1234","date":"2026-11-10","amount":-25}]');
+  if (r ->> 'newTransactions')::int <> 1 or (r ->> 'skippedOverlap')::int <> 1 then raise exception 'FAIL: overlap not skipped %', r; end if;
+  if (select count(*) from public.bank_transactions where account_last4 = '1234' and post_date = '2026-11-09') <> 1 then raise exception 'FAIL: day counted twice'; end if;
+  if (select format from public.bank_files where sha256 = 'bai-1') <> 'bai2' then raise exception 'FAIL: format not stored'; end if;
+  if (select closing_ledger from public.bank_balances where account_last4 = '1234' and as_of = '2026-11-10') <> 75 then raise exception 'FAIL: balance not stored'; end if;
+  r := public.import_bank_file('{"name":"d.txt","path":"x/d.txt","sha256":"bai-1","firstDate":"2026-11-09","lastDate":"2026-11-10","weekEnding":"2026-11-13","format":"bai2","balances":[]}',
+         '[{"fp":"b1","acct":"1234","date":"2026-11-09","amount":-50},{"fp":"b2","acct":"1234","date":"2026-11-10","amount":-25}]');
+  if (r ->> 'newTransactions')::int <> 0 or (r ->> 'alreadyKnown')::int <> 1 then raise exception 'FAIL: re-import %', r; end if;
+end $$;
+reset role;
+select pg_temp.act_as('viewer@example.com'); set role authenticated;
+do $$ begin
+  if (select count(*) from public.bank_balances) <> 1 then raise exception 'FAIL: viewer cannot read balances'; end if;
+  begin insert into public.bank_balances (account_last4, as_of) values ('1', '2026-01-01'); raise exception 'FAIL: viewer wrote a balance';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+set role radar_hub;
+do $$ begin perform count(*) from reporting.bank_balances; end $$;
 reset role;
 
 select 'ALL SECURITY TESTS PASSED' as result;
